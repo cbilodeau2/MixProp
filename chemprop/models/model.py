@@ -1,5 +1,6 @@
 from argparse import Namespace
 
+import torch
 import torch.nn as nn
 
 from .mpn import MPN
@@ -78,6 +79,14 @@ class MoleculeModel(nn.Module):
         # Create FFN model
         self.ffn = nn.Sequential(*ffn)
 
+    def featurize(self, *input):
+        """
+        Computes feature vectors of the input by leaving out the last layer.
+        :param input: Input.
+        :return: The feature vectors computed by the MoleculeModel.
+        """
+        return self.ffn[:-1](self.encoder(*input))
+
     def forward(self, *input):
         """
         Runs the MoleculeModel on input.
@@ -113,6 +122,10 @@ def build_model(args: Namespace) -> nn.Module:
     model = MoleculeModel(classification=args.dataset_type == 'classification', multiclass=args.dataset_type == 'multiclass')
     model.create_encoder(args)
     model.create_ffn(args)
+
+    # Check hasattr for compatibility with loaded args from previous versions of chemprop
+    if hasattr(args, 'pytorch_seed') and args.pytorch_seed is not None:
+        torch.manual_seed(args.pytorch_seed)
 
     initialize_weights(model)
 

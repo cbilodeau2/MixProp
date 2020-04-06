@@ -3,6 +3,7 @@ import json
 import os
 from tempfile import TemporaryDirectory
 import pickle
+import sys
 
 import torch
 
@@ -152,6 +153,8 @@ def add_train_args(parser: ArgumentParser):
                         help='Final learning rate')
     parser.add_argument('--no_features_scaling', action='store_true', default=False,
                         help='Turn off scaling of features')
+    parser.add_argument('--class_balance', action='store_true', default=False,
+                        help='Use weights to balance classes within mini-batches during training')
 
     # Model arguments
     parser.add_argument('--ensemble_size', type=int, default=1,
@@ -175,6 +178,8 @@ def add_train_args(parser: ArgumentParser):
                         help='Number of layers in FFN after MPN encoding')
     parser.add_argument('--atom_messages', action='store_true', default=False,
                         help='Use messages on atoms instead of messages on bonds')
+    parser.add_argument('--pytorch_seed', type=int, default=None,
+                        help='Seed for PyTorch randomness (e.g. random initial weights)')
 
 
 def update_checkpoint_args(args: Namespace):
@@ -277,6 +282,9 @@ def modify_train_args(args: Namespace):
             (args.dataset_type == 'multiclass' and args.metric in ['cross_entropy', 'accuracy'])):
         raise ValueError(f'Metric "{args.metric}" invalid for dataset type "{args.dataset_type}".')
 
+    if args.class_balance:
+        assert args.dataset_type == 'classification'
+
     args.minimize_score = args.metric in ['rmse', 'mae', 'mse', 'cross_entropy']
 
     update_checkpoint_args(args)
@@ -305,6 +313,8 @@ def modify_train_args(args: Namespace):
 
     if args.test:
         args.epochs = 0
+
+    args.command_line = f'python {" ".join(sys.argv)}'
 
 
 def parse_train_args() -> Namespace:

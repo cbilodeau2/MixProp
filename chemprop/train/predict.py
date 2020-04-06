@@ -10,6 +10,7 @@ from chemprop.data import MoleculeDataset, StandardScaler
 def predict(model: nn.Module,
             data: MoleculeDataset,
             batch_size: int,
+            disable_progress_bar: bool = False,
             scaler: StandardScaler = None) -> List[List[float]]:
     """
     Makes predictions on a dataset using an ensemble of models.
@@ -17,6 +18,7 @@ def predict(model: nn.Module,
     :param model: A model.
     :param data: A MoleculeDataset.
     :param batch_size: Batch size.
+    :param disable_progress_bar: Whether to disable the progress bar.
     :param scaler: A StandardScaler object fit on the training targets.
     :return: A list of lists of predictions. The outer list is examples
     while the inner list is tasks.
@@ -27,7 +29,7 @@ def predict(model: nn.Module,
 
     num_iters, iter_step = len(data), batch_size
 
-    for i in trange(0, num_iters, iter_step):
+    for i in trange(0, num_iters, iter_step, disable=disable_progress_bar):
         # Prepare batch
         mol_batch = MoleculeDataset(data[i:i + batch_size])
         smiles_batch, features_batch = mol_batch.smiles(), mol_batch.features()
