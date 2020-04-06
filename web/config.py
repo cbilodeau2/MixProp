@@ -20,3 +20,5 @@ PREDICTIONS_FILENAME = 'predictions.csv'
 DB_FILENAME = 'chemprop.sqlite3'
 CUDA = torch.cuda.is_available()
 GPUS = list(range(torch.cuda.device_count()))
+DEMO = True
+

@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument('--initdb', action='store_true', default=False, help='Initialize Database')
     args = parser.parse_args()
 
-    app.config['DEMO'] = args.demo
+    # app.config['DEMO'] = True
 
     db.init_app(app)
 

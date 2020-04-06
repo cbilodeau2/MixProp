@@ -13,13 +13,18 @@
     <h3>Predict</h3>
     {% endif %}
 
-    <form enctype="multipart/form-data" method="POST">
-        <!--Model checkpoint selector-->
-        <h5>Model checkpoint</h5>
-        <select name="checkpointName" required>
-            {% for checkpoint in checkpoints %}
-                <option value="{{ checkpoint[0] }}">{{ checkpoint[1] }}</option>
-            {% endfor %}
+    <h4>Antibiotics</h4>
+    <p>A model trained to predict the probability that a molecule will inhibit the growth of E. coli. This model was trained on the data from <a href="https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1">A Deep Learning Approach to Antibiotic Discovery</a>. The model is an ensemble of 20 chemprop models augmented with RDKit features and with optimized hyperparame</p>
+
+    <h4>SARS</h4>
+    <p> A model trained to predict the probability that a molecule will inhibit the 3CL protease of SARS-CoV. This model was trained on the data from PubChem assay <a href="https://pubchem.ncbi.nlm.nih.gov/bioassay/1706">AID1706</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/AID1706_binarized_sars.csv">here</a>). The model is an ensemble of 5 chemprop models augmented with RDKit features.</p>
+    
+    <h4>SARS - Balanced</h4>
+    <p>The same as SARS but trained using a class balance approach where each training batch samples an equal number of positive and negative molecules. Due to the extreme class imbalance of AID1706 (0.1% positive, 99.9% negative), this class balance approach encourages the model to produce predictions in a more reasonable range rather than predicting extremely low probabilities for almost all molecules (due to the weight of the negatives).</p>
+    
+    <form enctype="multipart/form-data" method="POST">         <!--Model checkpoint selector-->         <h5>Model checkpoint</h5>         <select name="checkpointName" required>             {% for checkpoint in checkpoints %}                 <option value="{{ checkpoint[0] }}">{{ checkpoint[1] }}</option>             {% endfor%}
+
+
         </select>
 
         <br>
