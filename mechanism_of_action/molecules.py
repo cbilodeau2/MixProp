@@ -69,17 +69,18 @@ class Drug:
 
             molecules = chembl_client.molecule.filter(
                 molecule_structures__canonical_smiles__flexmatch=smiles).only(
-                    ['molecule_chembl_id'])
+                    ['molecule_chembl_id', 'pref_name'])
 
             if len(molecules) == 0:
                 raise ValueError(f'No molecule found for SMILES: {smiles}')
 
             self.chembl_id = molecules[0]['molecule_chembl_id']
-        elif not smiles:
+            self.name = molecules[0]['pref_name']
+        else:
             self.chembl_id = chembl_id
 
             molecules = chembl_client.molecule.get(chembl_id).only(
-                ['molecular_structures'])
+                ['molecular_structures', 'pref_name'])
 
             if len(molecules) == 0:
                 raise ValueError(
@@ -87,15 +88,13 @@ class Drug:
 
             molecular_structures = molecules[0]['molecular_structures']
             self.smiles = molecular_structures['canonical_smiles']
-        else:
-            self.smiles = smiles
-            self.chembl_id = chembl_id
+            self.name = molecules[0]['pref_name']
 
     def get_targets(self) -> List[Target]:
         """
         :returns List[Target]: the molecules targeted by the Drug.
         """
-        activities = chembl_client.activity.filter(
+        activities = chembl_client.mechanism.filter(
             molecule_chembl_id__in=[self.chembl_id]).only(['target_chembl_id',
                                                            'target_organism'])
 
