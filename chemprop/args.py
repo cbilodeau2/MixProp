@@ -171,6 +171,8 @@ class TrainArgs(Tap):
     separate_test_features_path: List[str] = None  # Path to file with features for separate test set
     config_path: str = None  # Path to a .json file containing arguments. Any arguments present in the config file will override arguments specified via the command line or by the defaults.
     ensemble_size: int = 1  # Number of models in ensemble
+    knowledge_graph: bool = False  # Whether to create a knowledge graph model
+    subgraph_size: int = 8  # Size of subgraphs to extract when knowledge_graph is True
 
     # Training arguments
     batch_size: int = 50  # Batch size

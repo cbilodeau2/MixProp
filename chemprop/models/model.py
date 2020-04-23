@@ -109,6 +109,16 @@ class MoleculeModel(nn.Module):
         return output
 
 
+class KGModel(nn.Module):
+    def __init__(self, args: TrainArgs):
+        super(KGModel, self).__init__()
+        self.subgraph_model = MoleculeModel(featurizer=True)
+        self.graph_model = MoleculeModel()
+
+    def forward(self, *input) -> torch.FloatTensor:
+        pass
+
+
 def build_model(args: TrainArgs) -> MoleculeModel:
     """
     Builds a MoleculeModel, which is a message passing neural network + feed-forward layers.

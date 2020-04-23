@@ -7,8 +7,10 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from rdkit import Chem
 
 from .scaler import StandardScaler
+from chemprop.args import TrainArgs
 from chemprop.features import get_features_generator
 from chemprop.features import BatchMolGraph, MolGraph
+from kg_chem import extract_subgraphs_from_smiles
 
 
 # Cache of graph featurizations
@@ -122,25 +124,41 @@ class MoleculeDataset(Dataset):
         """
         return [d.mol for d in self._data]
 
-    def batch_graph(self, cache: bool = False) -> BatchMolGraph:
+    def batch_graph(self, cache: bool = False, args: TrainArgs = None) -> BatchMolGraph:
         """
         Returns a BatchMolGraph with the graph featurization of the molecules.
 
         :param cache: Whether to store the graph featurizations in the global cache.
+        :param args: Arguments.
         :return: A BatchMolGraph.
         """
+        if args is not None:
+            knowledge_graph, subgraph_size = args.knowledge_graph, args.subgraph_size
+        else:
+            knowledge_graph = False
+            subgraph_size = 0
+
         if self._batch_graph is None:
             mol_graphs = []
-            for d in self._data:
-                if d.smiles in SMILES_TO_GRAPH:
-                    mol_graph = SMILES_TO_GRAPH[d.smiles]
-                else:
-                    mol_graph = MolGraph(d.mol)
-                    if cache:
-                        SMILES_TO_GRAPH[d.smiles] = mol_graph
-                mol_graphs.append(mol_graph)
+            subgraph_scope = [[] for _ in range(len(self._data))] if knowledge_graph else None  # maps from molecule index to indices in mol_graphs
 
-            self._batch_graph = BatchMolGraph(mol_graphs)
+            for i, d in enumerate(self._data):
+                if knowledge_graph:
+                    subgraphs = extract_subgraphs_from_smiles(d.smiles, size=subgraph_size)
+                    for subgraph in subgraphs:
+                        subgraph_scope[i].append(len(mol_graphs))
+                        mol_graph = MolGraph(d.mol, include_nodes=list(subgraph.nodes()))
+                        mol_graphs.append(mol_graph)
+                else:
+                    if d.smiles in SMILES_TO_GRAPH:
+                        mol_graph = SMILES_TO_GRAPH[d.smiles]
+                    else:
+                        mol_graph = MolGraph(d.mol)
+                        if cache:
+                            SMILES_TO_GRAPH[d.smiles] = mol_graph
+                    mol_graphs.append(mol_graph)
+
+            self._batch_graph = BatchMolGraph(mol_graphs, subgraph_scope=subgraph_scope)
 
         return self._batch_graph
 
@@ -324,7 +342,8 @@ class MoleculeDataLoader(DataLoader):
                  cache: bool = False,
                  class_balance: bool = False,
                  shuffle: bool = False,
-                 seed: int = 0):
+                 seed: int = 0,
+                 args: TrainArgs = None):
         """
         Initializes the MoleculeDataLoader.
 
@@ -337,6 +356,7 @@ class MoleculeDataLoader(DataLoader):
                               Set shuffle to True in order to get a random subset of the larger class.
         :param shuffle: Whether to shuffle the data.
         :param seed: Random seed. Only needed if shuffle is True.
+        :param args: Arguments.
         """
         self._dataset = dataset
         self._batch_size = batch_size
@@ -345,6 +365,7 @@ class MoleculeDataLoader(DataLoader):
         self._class_balance = class_balance
         self._shuffle = shuffle
         self._seed = seed
+        self._args = args
 
         self._sampler = MoleculeSampler(
             dataset=self._dataset,
@@ -361,7 +382,7 @@ class MoleculeDataLoader(DataLoader):
             :return: A MoleculeDataset with all the MoleculeDatapoints and a BatchMolGraph graph featurization.
             """
             data = MoleculeDataset(data)
-            data.batch_graph(cache=self._cache)  # Forces computation and caching of the BatchMolGraph for the molecules
+            data.batch_graph(cache=self._cache, args=self._args)  # Forces computation and caching of the BatchMolGraph for the molecules
 
             return data
 

@@ -1,5 +1,6 @@
 from typing import List, Tuple, Union
 
+import networkx as nx
 from rdkit import Chem
 import torch
 
@@ -122,11 +123,13 @@ class MolGraph:
     - b2revb: A mapping from a bond index to the index of the reverse bond.
     """
 
-    def __init__(self, mol: Union[str, Chem.Mol]):
+    def __init__(self, mol: Union[str, Chem.Mol], include_nodes: List[int] = None):
         """
         Computes the graph structure and featurization of a molecule.
 
         :param mol: A SMILES string or an RDKit molecule.
+        :param include_nodes: MolGraph will only contain nodes and edges of the subgraph induced
+                              by the node indices in include_nodes. If None, uses full graph.
         """
         # Convert SMILES to RDKit molecule if necessary
         if type(mol) == str:
@@ -140,13 +143,17 @@ class MolGraph:
         self.b2a = []  # mapping from bond index to the index of the atom the bond is coming from
         self.b2revb = []  # mapping from bond index to the index of the reverse bond
 
-        # fake the number of "atoms" if we are collapsing substructures
-        self.n_atoms = mol.GetNumAtoms()
-        
+        # If include_nodes is not specified, include all nodes
+        if include_nodes is None:
+            include_nodes = list(range(mol.GetNumAtoms()))
+
         # Get atom features
+        node_to_atom = {}
         for i, atom in enumerate(mol.GetAtoms()):
-            self.f_atoms.append(atom_features(atom))
-        self.f_atoms = [self.f_atoms[i] for i in range(self.n_atoms)]
+            if i in include_nodes:
+                node_to_atom[len(self.f_atoms)] = i
+                self.f_atoms.append(atom_features(atom))
+        self.n_atoms = len(self.f_atoms)
 
         for _ in range(self.n_atoms):
             self.a2b.append([])
@@ -154,7 +161,7 @@ class MolGraph:
         # Get bond features
         for a1 in range(self.n_atoms):
             for a2 in range(a1 + 1, self.n_atoms):
-                bond = mol.GetBondBetweenAtoms(a1, a2)
+                bond = mol.GetBondBetweenAtoms(node_to_atom[a1], node_to_atom[a2])
 
                 if bond is None:
                     continue
@@ -180,6 +187,8 @@ class BatchMolGraph:
     A BatchMolGraph represents the graph structure and featurization of a batch of molecules.
 
     A BatchMolGraph contains the attributes of a MolGraph plus:
+    - subgraph_scope: When using knowledge graphs, this is a mapping from molecule index to subgraph indices
+                      in the BatchMolGraph in order to reconstruct each molecule from its subgraphs.
     - atom_fdim: The dimensionality of the atom features.
     - bond_fdim: The dimensionality of the bond features (technically the combined atom/bond features).
     - a_scope: A list of tuples indicating the start and end atom indices for each molecule.
@@ -189,7 +198,9 @@ class BatchMolGraph:
     - a2a: (Optional): A mapping from an atom index to neighboring atom indices.
     """
 
-    def __init__(self, mol_graphs: List[MolGraph]):
+    def __init__(self, mol_graphs: List[MolGraph], subgraph_scope: List[List[int]] = None):
+        self.subgraph_scope = subgraph_scope
+
         self.atom_fdim = get_atom_fdim()
         self.bond_fdim = get_bond_fdim()
 

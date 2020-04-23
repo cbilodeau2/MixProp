@@ -72,7 +72,8 @@ def make_predictions(args: PredictArgs, smiles: List[str] = None) -> List[Option
     test_data_loader = MoleculeDataLoader(
         dataset=test_data,
         batch_size=args.batch_size,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        args=args
     )
 
     print(f'Predicting with an ensemble of {len(args.checkpoint_paths)} models')

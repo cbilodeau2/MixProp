@@ -159,19 +159,22 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
         cache=cache,
         class_balance=args.class_balance,
         shuffle=True,
-        seed=args.seed
+        seed=args.seed,
+        args=args
     )
     val_data_loader = MoleculeDataLoader(
         dataset=val_data,
         batch_size=args.batch_size,
         num_workers=num_workers,
-        cache=cache
+        cache=cache,
+        args=args
     )
     test_data_loader = MoleculeDataLoader(
         dataset=test_data,
         batch_size=args.batch_size,
         num_workers=num_workers,
-        cache=cache
+        cache=cache,
+        args=args
     )
 
     # Train ensemble of models
