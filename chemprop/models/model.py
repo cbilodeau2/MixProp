@@ -48,9 +48,12 @@ class MoleculeModel(nn.Module):
 
         :param args: Arguments.
         """
-        first_linear_dim = args.hidden_size
-        if args.use_input_features:
-            first_linear_dim += args.features_dim
+        if args.features_only:
+            first_linear_dim = args.features_size
+        else:
+            first_linear_dim = args.hidden_size
+            if args.use_input_features:
+                first_linear_dim += args.features_size
 
         # When using dropout for confidence, use dropouts for evaluation in addition to training.
         if args.confidence == 'dropout':

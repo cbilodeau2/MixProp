@@ -30,7 +30,11 @@ class MPNEncoder(nn.Module):
         self.undirected = args.undirected
         self.atom_messages = args.atom_messages
         self.use_input_features = args.use_input_features
+        self.features_only = args.features_only
         self.args = args
+
+        if self.features_only:
+            return
 
         # Dropout
         self.dropout_layer = nn.Dropout(p=self.dropout)
@@ -70,6 +74,9 @@ class MPNEncoder(nn.Module):
 
             if self.args.cuda:
                 features_batch = features_batch.cuda()
+
+            if self.features_only:
+                return features_batch
 
         f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope = mol_graph.get_components()
 
