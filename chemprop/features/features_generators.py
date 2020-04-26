@@ -45,7 +45,7 @@ def get_available_features_generators() -> List[str]:
     return list(FEATURES_GENERATOR_REGISTRY.keys())
 
 
-MORGAN_RADIUS = 2
+MORGAN_RADIUS = 3
 MORGAN_NUM_BITS = 2048
 
 
@@ -62,7 +62,7 @@ def morgan_binary_features_generator(mol: Molecule,
     :return: A 1-D numpy array containing the binary Morgan fingerprint.
     """
     mol = Chem.MolFromSmiles(mol) if type(mol) == str else mol
-    features_vec = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=num_bits)
+    features_vec = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=num_bits, useChirality=True)
     features = np.zeros((1,))
     DataStructs.ConvertToNumpyArray(features_vec, features)
 
