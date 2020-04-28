@@ -23,8 +23,8 @@ import GPy
 from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
 from .train import train
-from .confidence_estimator import confidence_estimator_builder
-from .confidence_evaluator import ConfidenceEvaluator
+from .uncertainty_estimator import uncertainty_estimator_builder
+from .uncertainty_evaluator import UncertaintyEvaluator
 from chemprop.data import StandardScaler
 from chemprop.data.utils import get_class_sizes, get_data, get_task_names, split_data
 from chemprop.models import build_model, train_residual_model
@@ -155,8 +155,8 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     sum_test_preds = np.zeros((len(test_smiles), args.num_tasks))
     sum_val_preds = np.zeros((len(val_smiles), args.num_tasks))
 
-    if args.confidence:
-        confidence_estimator = confidence_estimator_builder(args.confidence)(train_data, val_data, test_data, scaler, args)
+    if args.uncertainty:
+        uncertainty_estimator = uncertainty_estimator_builder(args.uncertainty)(train_data, val_data, test_data, scaler, args)
 
     # Train ensemble of models
     for model_idx in range(args.ensemble_size):
@@ -166,7 +166,7 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         writer = SummaryWriter(log_dir=save_dir)
 
         # Load/build model
-        if args.confidence not in ['snapshot', 'dropout'] or model_idx == 0:
+        if args.uncertainty not in ['snapshot', 'dropout'] or model_idx == 0:
             if args.checkpoint_paths is not None:
                 debug(
                     f'Loading model {model_idx} from {args.checkpoint_paths[model_idx]}')
@@ -193,10 +193,10 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         scheduler = build_lr_scheduler(optimizer, args)
 
         num_epochs = args.epochs
-        if args.confidence == 'snapshot':
+        if args.uncertainty == 'snapshot':
             num_epochs = num_epochs // args.ensemble_size
         
-        if args.confidence == 'dropout' and model_idx != 0:
+        if args.uncertainty == 'dropout' and model_idx != 0:
             num_epochs = 0
 
         # Run training
@@ -207,7 +207,7 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
 
             train_data_sample = train_data
 
-            # if args.confidence == 'bootstrap':
+            # if args.uncertainty == 'bootstrap':
             #     print(train_data)
             #     train_data_sample = sample(train_data, int(args.train_data_size * (1.5 / args.ensemble_size)))
 
@@ -294,8 +294,8 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         info(f'Model {model_idx} test {args.metric} = {avg_test_score:.6f}')
         writer.add_scalar(f'test_{args.metric}', avg_test_score, 0)
 
-        if args.confidence:
-            confidence_estimator.process_model(model, predict)
+        if args.uncertainty:
+            uncertainty_estimator.process_model(model)
 
         if args.show_individual_scores:
             # Individual test scores
@@ -324,23 +324,23 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     writer.add_scalar(
         f'ensemble_test_{args.metric}', avg_ensemble_test_score, 0)
 
-    if args.confidence:
+    if args.uncertainty:
         val_targets = np.array(val_targets)
         test_targets = np.array(test_targets)
 
         (val_predictions,
-         val_confidence,
+         val_uncertainty,
          test_predictions,
-         test_confidence) = confidence_estimator.compute_confidence(avg_val_preds, avg_test_preds)
+         test_uncertainty) = uncertainty_estimator.compute_uncertainty(avg_val_preds, avg_test_preds)
 
-        ConfidenceEvaluator.save(val_predictions,
+        UncertaintyEvaluator.save(val_predictions,
                                  val_targets,
-                                 val_confidence,
+                                 val_uncertainty,
                                  test_predictions,
                                  test_targets,
-                                 test_confidence,
+                                 test_uncertainty,
                                  args)
 
-        ConfidenceEvaluator.visualize(args.save_confidence, args.confidence_evaluation_methods)
+        UncertaintyEvaluator.visualize(args.save_uncertainty, args.uncertainty_evaluation_methods)
 
     return ensemble_scores
