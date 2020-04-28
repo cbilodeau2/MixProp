@@ -168,7 +168,7 @@ def get_loss_func(args: Namespace) -> nn.Module:
         return nn.BCEWithLogitsLoss(reduction='none')
 
     if args.dataset_type == 'regression':
-        if args.confidence == 'nn':
+        if args.uncertainty == 'mve':
             return negative_log_likelihood
         return nn.MSELoss(reduction='none')
 

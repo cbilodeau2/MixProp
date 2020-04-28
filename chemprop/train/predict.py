@@ -11,7 +11,7 @@ def predict(model: nn.Module,
             data: MoleculeDataset,
             batch_size: int,
             scaler: StandardScaler = None,
-            confidence: bool = False) -> List[List[float]]:
+            uncertainty: bool = False) -> List[List[float]]:
     """
     Makes predictions on a dataset using an ensemble of models.
 
@@ -19,7 +19,7 @@ def predict(model: nn.Module,
     :param data: A MoleculeDataset.
     :param batch_size: Batch size.
     :param scaler: A StandardScaler object fit on the training targets.
-    :param confidence: Whether confidence values should be returned.
+    :param uncertainty: Whether uncertainty values should be returned.
     :return: A list of lists of predictions. The outer list is examples
     while the inner list is tasks.
     """
@@ -46,7 +46,7 @@ def predict(model: nn.Module,
         batch_preds = batch_preds.tolist()
         preds.extend(batch_preds)
 
-    if model.confidence:
+    if model.uncertainty:
         p = []
         c = []
         for i in range(len(preds)):
@@ -57,7 +57,7 @@ def predict(model: nn.Module,
             p = scaler.inverse_transform(p).tolist()
             c = (scaler.stds**2 * c).tolist()
 
-        if confidence:
+        if uncertainty:
             return p, c
 
         return p

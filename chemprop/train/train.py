@@ -45,7 +45,7 @@ def train(model: nn.Module,
 
     data.shuffle()
 
-    if args.confidence == 'bootstrap':
+    if args.uncertainty == 'bootstrap':
         data.sample(int(4 * len(data) / args.ensemble_size))
 
     loss_sum, iter_count = 0, 0
@@ -76,7 +76,7 @@ def train(model: nn.Module,
         model.zero_grad()
         preds = model(batch, features_batch)
 
-        if model.confidence:
+        if model.uncertainty:
             pred_targets = preds[:, [j for j in range(len(preds[0])) if j % 2 == 0]]
             pred_var = preds[:, [j for j in range(len(preds[0])) if j % 2 == 1]]
             loss = loss_func(pred_targets, pred_var, targets)

@@ -39,7 +39,7 @@ def write_experiments(method: str,
                   'split_type': 'random',
                   'seed': i,
                   'ensemble_size': 1,
-                  'confidence': method,
+                  'uncertainty': method,
                   'split_sizes': '0.5 0.2 0.3',
                   'dropout': 0}
 
@@ -57,12 +57,12 @@ def write_experiments(method: str,
             params['features_only'] = None
             params['features_generator'] = 'morgan'
 
-        folder = f'confidence_evaluation/uncalibrated/{experiment_filename}/' \
+        folder = f'uncertainty_evaluation/uncalibrated/{experiment_filename}/'\
                  f'{dataset}/{params["split_type"]}'
 
         if not os.path.exists(folder):
             os.makedirs(folder)
-        params['save_confidence'] = f'{folder}/{i}.txt'
+        params['save_uncertainty'] = f'{folder}/{i}.txt'
 
         populate_file.write(params_to_line(params))
 
@@ -70,12 +70,12 @@ def write_experiments(method: str,
 
     params['split_type'] = 'scaffold'
 
-    folder = f'confidence_evaluation/uncalibrated/{experiment_filename}/' \
+    folder = f'uncertainty_evaluation/uncalibrated/{experiment_filename}/' \
              f'{dataset}/{params["split_type"]}'
 
     if not os.path.exists(folder):
         os.makedirs(folder)
-    params['save_confidence'] = f'{folder}/{i}.txt'
+    params['save_uncertainty'] = f'{folder}/{i}.txt'
 
     populate_file.write(params_to_line(params))
     populate_file.write('\n')
@@ -106,7 +106,7 @@ if __name__ == "__main__":
                         'fp_random_forest': ['fp_random_forest'],
                         'fp_gaussian':      ['fp_gaussian']}
 
-    f = open('confidence_evaluation/populate.sh', 'w+')
+    f = open('uncertainty_evaluation/populate.sh', 'w+')
 
     datasets = ['lipo', 'delaney', 'freesolv', 'qm7', 'logp']
 

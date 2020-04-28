@@ -16,17 +16,17 @@ class EvaluationDropout(nn.Dropout):
 class MoleculeModel(nn.Module):
     """A MoleculeModel is a model which contains a message passing network following by feed-forward layers."""
 
-    def __init__(self, classification: bool, confidence: bool = False):
+    def __init__(self, classification: bool, uncertainty: bool = False):
         """
         Initializes the MoleculeModel.
 
         :param classification: Whether the model is a classification model.
-        :param confidence: Whether confidence values should be predicted.
+        :param uncertainty: Whether uncertainty values should be predicted.
         """
         super(MoleculeModel, self).__init__()
 
         self.classification = classification
-        self.confidence = confidence
+        self.uncertainty = uncertainty
 
         if self.classification:
             self.sigmoid = nn.Sigmoid()
@@ -55,8 +55,8 @@ class MoleculeModel(nn.Module):
             if args.use_input_features:
                 first_linear_dim += args.features_size
 
-        # When using dropout for confidence, use dropouts for evaluation in addition to training.
-        if args.confidence == 'dropout':
+        # When using dropout for uncertainty, use dropouts for evaluation in addition to training.
+        if args.uncertainty == 'dropout':
             dropout = EvaluationDropout(args.dropout)
         else:
             dropout = nn.Dropout(args.dropout)
@@ -65,7 +65,7 @@ class MoleculeModel(nn.Module):
 
         output_size = args.output_size
 
-        if self.confidence:
+        if self.uncertainty:
             output_size *= 2
 
         # Create FFN layers
@@ -112,7 +112,7 @@ class MoleculeModel(nn.Module):
             *list(self.ffn.children())[:-1])
         output = ffn(self.encoder(*input))
 
-        if self.confidence:
+        if self.uncertainty:
             even_indices = torch.tensor(range(0, list(output.size())[1], 2))
             odd_indices = torch.tensor(range(1, list(output.size())[1], 2))
 
@@ -121,10 +121,10 @@ class MoleculeModel(nn.Module):
                 odd_indices = odd_indices.cuda()
 
             predicted_means = torch.index_select(output, 1, even_indices)
-            predicted_confidences = torch.index_select(output, 1, odd_indices)
-            capped_confidences = nn.functional.softplus(predicted_confidences)
+            predicted_uncertainties = torch.index_select(output, 1, odd_indices)
+            capped_uncertainties = nn.functional.softplus(predicted_uncertainties)
 
-            output = torch.stack((predicted_means, capped_confidences), dim = 2).view(output.size())
+            output = torch.stack((predicted_means, capped_uncertainties), dim = 2).view(output.size())
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training and self.use_last_hidden:
@@ -144,8 +144,8 @@ def build_model(args: Namespace) -> nn.Module:
     args.output_size = output_size
 
     is_classifier = args.dataset_type == 'classification'
-    if args.confidence == 'nn':
-        model = MoleculeModel(classification=is_classifier, confidence=True)
+    if args.uncertainty == 'mve':
+        model = MoleculeModel(classification=is_classifier, uncertainty=True)
     else:
         model = MoleculeModel(classification=is_classifier)
     model.create_encoder(args)

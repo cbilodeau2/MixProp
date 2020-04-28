@@ -331,16 +331,18 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
         (val_predictions,
          val_uncertainty,
          test_predictions,
-         test_uncertainty) = uncertainty_estimator.compute_uncertainty(avg_val_preds, avg_test_preds)
+         test_uncertainty) = uncertainty_estimator.compute_uncertainty(
+             avg_val_preds, avg_test_preds)
 
         UncertaintyEvaluator.save(val_predictions,
-                                 val_targets,
-                                 val_uncertainty,
-                                 test_predictions,
-                                 test_targets,
-                                 test_uncertainty,
-                                 args)
+                                  val_targets,
+                                  val_uncertainty,
+                                  test_predictions,
+                                  test_targets,
+                                  test_uncertainty,
+                                  args)
 
-        UncertaintyEvaluator.visualize(args.save_uncertainty, args.uncertainty_evaluation_methods)
+        UncertaintyEvaluator.visualize(args.save_uncertainty,
+                                       args.uncertainty_evaluation_methods)
 
     return ensemble_scores

@@ -1,11 +1,11 @@
 from argparse import Namespace
-import numpy as np
 import GPy
 import heapq
+import numpy as np
+from rdkit import Chem
 from sklearn.ensemble import RandomForestRegressor
 import torch.nn as nn
 from typing import Any, Callable, List, Tuple
-from rdkit import Chem
 
 from .predict import predict
 from chemprop.data import MoleculeDataset, StandardScaler

@@ -165,20 +165,20 @@ def add_train_args(parser: ArgumentParser):
     parser.add_argument('--atom_messages', action='store_true', default=False,
                         help='Use messages on atoms instead of messages on bonds')
 
-    # Confidence Arguments
-    parser.add_argument('--confidence', type=str,
-                        choices=[None, 'gaussian', 'random_forest', 'ensemble', 'tanimoto', 'conformal', 'probability', 'conformal', 'nn', 'boost', 'latent_space', 'bootstrap', 'snapshot', 'dropout', 'fp_random_forest', 'fp_gaussian'], default=None,
-                        help='Measure confidence values for the prediction.')
-    parser.add_argument('--calibrate_confidence', action='store_true', default=False, help='Calibrate confidence by test data.')
-    parser.add_argument('--save_confidence', type=str, default=None,
-                        help='Measure confidence values for the prediction.')
+    # Uncertainty Arguments
+    parser.add_argument('--uncertainty', type=str,
+                        choices=[None, 'gaussian', 'random_forest', 'ensemble', 'tanimoto', 'mve', 'latent_space', 'bootstrap', 'snapshot', 'dropout', 'fp_random_forest', 'fp_gaussian'], default=None,
+                        help='Measure uncertainty values for the prediction.')
+    parser.add_argument('--calibrate_uncertainty', action='store_true', default=False, help='Calibrate uncertainty by test data.')
+    parser.add_argument('--save_uncertainty', type=str, default=None,
+                        help='Measure uncertainty values for the prediction.')
     parser.add_argument('--last_hidden_size', type=int, default=300,
                         help='Size of last hidden layer.')
-    parser.add_argument('--confidence_evaluation_methods',
+    parser.add_argument('--uncertainty_evaluation_methods',
                         type=str,
                         default=[],
                         nargs='+',
-                        help='List of confidence evaluation methods.')
+                        help='List of uncertainty evaluation methods.')
 
 
 def update_checkpoint_args(args: Namespace):
