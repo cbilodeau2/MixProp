@@ -19,7 +19,6 @@ class MPNEncoder(nn.Module):
         :param args: Arguments.
         :param atom_fdim: Atom features dimension.
         :param bond_fdim: Bond features dimension.
-        :param atom_messages: Whether to use atoms to pass messages instead of bonds.
         """
         super(MPNEncoder, self).__init__()
         self.atom_fdim = atom_fdim

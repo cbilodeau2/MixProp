@@ -155,6 +155,7 @@ class MolGraph:
                 self.f_atoms.append(atom_features(atom))
         self.n_atoms = len(self.f_atoms)
 
+        # Initialize atom to bond mapping for each atom
         for _ in range(self.n_atoms):
             self.a2b.append([])
 
