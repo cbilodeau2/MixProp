@@ -5,7 +5,6 @@ from typing import Callable, Dict, Iterator, List, Union
 import numpy as np
 from rdkit import Chem
 from torch.utils.data import DataLoader, Dataset, Sampler
-from tqdm import tqdm
 
 from .scaler import StandardScaler
 from chemprop.args import TrainArgs
@@ -143,7 +142,7 @@ class MoleculeDataset(Dataset):
             mol_graphs = []
             subgraph_scope = [[] for _ in range(len(self._data))] if knowledge_graph else None  # maps from molecule index to indices in mol_graphs
 
-            for i, d in enumerate(tqdm(self._data)):
+            for i, d in enumerate(self._data):
                 if knowledge_graph:
                     subgraphs = extract_subgraphs_from_smiles(d.smiles, size=subgraph_size)
                     for subgraph in subgraphs:

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import List
 
 import numpy as np
@@ -139,6 +140,8 @@ class KGModel(nn.Module):
     def __init__(self, args: TrainArgs):
         super(KGModel, self).__init__()
         self.subgraph_model = MoleculeModel(args, featurizer=True)
+        graph_args = deepcopy(args)
+        graph_args.depth = 0
         self.graph_model = MoleculeModel(args, atom_fdim=args.hidden_size, bond_fdim=1)
 
     def forward(self,
@@ -151,10 +154,8 @@ class KGModel(nn.Module):
 
         # Build molecules from fully connected sets of subgraphs
         batch_mol_graph.connect_subgraphs(subgraph_encodings)
-        print('subgraphed')
 
         # Encode molecules from fully connected sets of subgraphs
         graph_encodings = self.graph_model(batch_mol_graph)
-        print('encoded')
 
         return graph_encodings
