@@ -344,10 +344,10 @@ class BatchMolGraph:
         assert len(self.f_atoms) == self.n_atoms
         assert len(self.f_bonds) == self.n_bonds
 
-        self.a2b = torch.LongTensor([a2b[a] + [0] * (self.max_num_bonds - len(a2b[a])) for a in range(self.n_atoms)],
-                                    device=device)
-        self.b2a = torch.LongTensor(b2a, device=device)
-        self.b2revb = torch.LongTensor(b2revb, device=device)
+        self.a2b = torch.tensor([a2b[a] + [0] * (self.max_num_bonds - len(a2b[a])) for a in range(self.n_atoms)],
+                                device=device)
+        self.b2a = torch.tensor(b2a, device=device)
+        self.b2revb = torch.tensor(b2revb, device=device)
         self.b2b = None
         self.a2a = None
 
