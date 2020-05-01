@@ -12,7 +12,7 @@ from typing import List
 
 import pandas as pd
 from rdkit import Chem
-from tap import Tap
+from tap import Tap  # pip install typed-argument-parser https://github.com/swansonk14/typed-argument-parser
 
 
 class Args(Tap):
