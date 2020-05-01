@@ -298,6 +298,7 @@ class BatchMolGraph:
         if self.subgraph_scope is None:
             raise ValueError('Cannot connect subgraphs when subgraph_scope is None.')
 
+        device = f_subgraphs.device
         a2b = [[] for _ in range(len(f_subgraphs) + 1)]
         b2a = [0]
         b2revb = [0]
@@ -337,15 +338,16 @@ class BatchMolGraph:
 
         self.n_atoms = len(a2b)
         self.n_bonds = len(b2a)
-        self.f_atoms = torch.cat([torch.zeros(1, f_subgraphs.shape[1]), f_subgraphs])
-        self.f_bonds = torch.zeros(self.n_bonds, 1)
+        self.f_atoms = torch.cat([torch.zeros(1, f_subgraphs.shape[1], device=device), f_subgraphs])
+        self.f_bonds = torch.zeros(self.n_bonds, 1, device=device)
 
         assert len(self.f_atoms) == self.n_atoms
         assert len(self.f_bonds) == self.n_bonds
 
-        self.a2b = torch.LongTensor([a2b[a] + [0] * (self.max_num_bonds - len(a2b[a])) for a in range(self.n_atoms)])
-        self.b2a = torch.LongTensor(b2a)
-        self.b2revb = torch.LongTensor(b2revb)
+        self.a2b = torch.LongTensor([a2b[a] + [0] * (self.max_num_bonds - len(a2b[a])) for a in range(self.n_atoms)],
+                                    device=device)
+        self.b2a = torch.LongTensor(b2a, device=device)
+        self.b2revb = torch.LongTensor(b2revb, device=device)
         self.b2b = None
         self.a2a = None
 
