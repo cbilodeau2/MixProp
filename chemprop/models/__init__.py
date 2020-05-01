@@ -1,1 +1,1 @@
-from .model import MoleculeModel
+from .model import KGModel, MoleculeModel

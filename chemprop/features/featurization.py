@@ -1,6 +1,5 @@
 from typing import List, Tuple, Union
 
-import networkx as nx
 from rdkit import Chem
 import torch
 
@@ -290,6 +289,65 @@ class BatchMolGraph:
             self.a2a = self.b2a[self.a2b]  # num_atoms x max_num_bonds
 
         return self.a2a
+
+    def connect_subgraphs(self, f_subgraphs: torch.FloatTensor) -> None:
+        """Builds fully connected graphs of molecular subgraphs.
+
+        :param f_subgraphs: Encodings of the subgraphs.
+        """
+        if self.subgraph_scope is None:
+            raise ValueError('Cannot connect subgraphs when subgraph_scope is None.')
+
+        a2b = [[] for _ in range(len(f_subgraphs) + 1)]
+        b2a = [0]
+        b2revb = [0]
+        self.n_atoms = 1
+        self.n_bonds = 1
+        self.a_scope = []
+        self.b_scope = []
+
+        b1 = 1
+        for subgraph_indices in self.subgraph_scope:
+            n_atoms = n_bonds = 0
+
+            for i, subgraph_index_1 in enumerate(subgraph_indices):
+                n_atoms += 1
+
+                for subgraph_index_2 in subgraph_indices[i + 1:]:
+                    a1 = subgraph_index_1 + 1
+                    a2 = subgraph_index_2 + 1
+                    b2 = b1 + 1
+
+                    a2b[a2].append(b1)
+                    b2a.append(a1)
+                    a2b[a1].append(b2)
+                    b2a.append(a2)
+                    b2revb.append(b2)
+                    b2revb.append(b1)
+
+                    b1 += 2
+                    n_bonds += 2
+
+            self.a_scope.append((self.n_atoms, n_atoms))
+            self.b_scope.append((self.n_bonds, n_bonds))
+            self.n_atoms += n_atoms
+            self.n_bonds += n_bonds
+
+        self.max_num_bonds = max(1, max(len(in_bonds) for in_bonds in a2b))
+
+        self.n_atoms = len(a2b)
+        self.n_bonds = len(b2a)
+        self.f_atoms = torch.cat([torch.zeros(1, f_subgraphs.shape[1]), f_subgraphs])
+        self.f_bonds = torch.zeros(self.n_bonds, 1)
+
+        assert len(self.f_atoms) == self.n_atoms
+        assert len(self.f_bonds) == self.n_bonds
+
+        self.a2b = torch.LongTensor([a2b[a] + [0] * (self.max_num_bonds - len(a2b[a])) for a in range(self.n_atoms)])
+        self.b2a = torch.LongTensor(b2a)
+        self.b2revb = torch.LongTensor(b2revb)
+        self.b2b = None
+        self.a2a = None
 
 
 def mol2graph(mols: Union[List[str], List[Chem.Mol]]) -> BatchMolGraph:

@@ -1,19 +1,29 @@
+from typing import List
+
+import numpy as np
 import torch
 import torch.nn as nn
 
 from .mpn import MPN
 from chemprop.args import TrainArgs
+from chemprop.features import BatchMolGraph
 from chemprop.nn_utils import get_activation_function, initialize_weights
 
 
 class MoleculeModel(nn.Module):
     """A MoleculeModel is a model which contains a message passing network following by feed-forward layers."""
 
-    def __init__(self, args: TrainArgs, featurizer: bool = False):
+    def __init__(self,
+                 args: TrainArgs,
+                 atom_fdim: int = None,
+                 bond_fdim: int = None,
+                 featurizer: bool = False):
         """
         Initializes the MoleculeModel.
 
         :param args: Arguments.
+        :param atom_fdim: Atom features dimension.
+        :param bond_fdim: Bond features dimension.
         :param featurizer: Whether the model should act as a featurizer, i.e. outputting
                            learned features in the final layer before prediction.
         """
@@ -21,6 +31,8 @@ class MoleculeModel(nn.Module):
 
         self.classification = args.dataset_type == 'classification'
         self.multiclass = args.dataset_type == 'multiclass'
+        self.atom_fdim = atom_fdim
+        self.bond_fdim = bond_fdim
         self.featurizer = featurizer
 
         self.output_size = args.num_tasks
@@ -44,7 +56,7 @@ class MoleculeModel(nn.Module):
 
         :param args: Arguments.
         """
-        self.encoder = MPN(args)
+        self.encoder = MPN(args, atom_fdim=self.atom_fdim, bond_fdim=self.bond_fdim)
 
     def create_ffn(self, args: TrainArgs):
         """
@@ -126,8 +138,23 @@ class MoleculeModel(nn.Module):
 class KGModel(nn.Module):
     def __init__(self, args: TrainArgs):
         super(KGModel, self).__init__()
-        self.subgraph_model = MoleculeModel(featurizer=True)
-        self.graph_model = MoleculeModel()
+        self.subgraph_model = MoleculeModel(args, featurizer=True)
+        self.graph_model = MoleculeModel(args, atom_fdim=args.hidden_size, bond_fdim=1)
 
-    def forward(self, *input) -> torch.FloatTensor:
-        pass
+    def forward(self,
+                batch_mol_graph: BatchMolGraph,
+                features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
+        assert features_batch is None
+
+        # Encode subgraphs
+        subgraph_encodings = self.subgraph_model(batch_mol_graph)
+
+        # Build molecules from fully connected sets of subgraphs
+        batch_mol_graph.connect_subgraphs(subgraph_encodings)
+        print('subgraphed')
+
+        # Encode molecules from fully connected sets of subgraphs
+        graph_encodings = self.graph_model(batch_mol_graph)
+        print('encoded')
+
+        return graph_encodings

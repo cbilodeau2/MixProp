@@ -8,7 +8,6 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 from tqdm import trange
-import pickle
 from torch.optim.lr_scheduler import ExponentialLR
 
 from .evaluate import evaluate, evaluate_predictions
@@ -17,7 +16,7 @@ from .train import train
 from chemprop.args import TrainArgs
 from chemprop.data import StandardScaler, MoleculeDataLoader
 from chemprop.data.utils import get_class_sizes, get_data, get_task_names, split_data
-from chemprop.models import MoleculeModel
+from chemprop.models import KGModel, MoleculeModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, get_metric_func, load_checkpoint,\
     makedirs, save_checkpoint, save_smiles_splits
@@ -173,7 +172,7 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
             model = load_checkpoint(args.checkpoint_paths[model_idx], logger=logger)
         else:
             debug(f'Building model {model_idx}')
-            model = MoleculeModel(args)
+            model = KGModel(args) if args.knowledge_graph else MoleculeModel(args)
 
         debug(model)
         debug(f'Number of parameters = {param_count(model):,}')
