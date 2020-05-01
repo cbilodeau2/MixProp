@@ -59,7 +59,7 @@ def compute_zinc_tranches(args: Args) -> None:
 
     # Set tranches and remove mols
     data.loc[valid_indices, 'tranche'] = tranches
-    data.drop(columns='mols')
+    data.drop(columns='mols', inplace=True)
 
     # Print tranche statistics
     for tranche, count in data['tranche'].value_counts().iteritems():
