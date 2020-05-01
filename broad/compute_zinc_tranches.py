@@ -40,6 +40,7 @@ def compute_zinc_tranches(args: Args) -> None:
     # Optionally de-duplicate by canonical smiles
     if args.deduplicate_by_smiles:
         data.drop_duplicates(subset='canonical_smiles', inplace=True)
+        data.reset_index(drop=True, inplace=True)
 
     # Filter out invalid mols
     valid_indices = [i for i, mol in enumerate(data['mols']) if mol is not None]
