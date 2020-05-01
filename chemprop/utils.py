@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 from chemprop.args import TrainArgs
 from chemprop.data import StandardScaler, MoleculeDataset
-from chemprop.models import MoleculeModel
+from chemprop.models import KGModel, MoleculeModel
 from chemprop.nn_utils import NoamLR
 
 
@@ -94,7 +94,7 @@ def load_checkpoint(path: str,
         args.device = device
 
     # Build model
-    model = MoleculeModel(args)
+    model = KGModel(args) if args.knowledge_graph else MoleculeModel(args)
     model_state_dict = model.state_dict()
 
     # Skip missing parameters and parameters of mismatched size
