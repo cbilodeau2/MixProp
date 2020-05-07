@@ -33,7 +33,7 @@ def predict(model: nn.Module,
         # Prepare batch
         mol_batch = MoleculeDataset(data[i:i + batch_size])
         smiles_batch, features_batch = mol_batch.smiles(), mol_batch.features()
-
+        print(features_batch)
         # Run model
         batch = smiles_batch
 

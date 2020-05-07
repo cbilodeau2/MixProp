@@ -14,14 +14,17 @@
     {% endif %}
 
     <h4>Antibiotics</h4>
-    <p>A model trained to predict the probability that a molecule will inhibit the growth of E. coli. This model was trained on the data from <a href="https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1">A Deep Learning Approach to Antibiotic Discovery</a>. The model is an ensemble of 20 chemprop models augmented with RDKit features and with optimized hyperparame</p>
+    <p>A model trained to predict the probability that a molecule will inhibit the growth of E. coli. This model was trained on the data from <a href="https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1">A Deep Learning Approach to Antibiotic Discovery</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/ecoli.csv">here</a>). The model is an ensemble of 20 chemprop models augmented with RDKit features and with optimized hyperparamers.</p>
 
     <h4>SARS</h4>
     <p> A model trained to predict the probability that a molecule will inhibit the 3CL protease of SARS-CoV. This model was trained on the data from PubChem assay <a href="https://pubchem.ncbi.nlm.nih.gov/bioassay/1706">AID1706</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/AID1706_binarized_sars.csv">here</a>). The model is an ensemble of 5 chemprop models augmented with RDKit features.</p>
     
     <h4>SARS - Balanced</h4>
     <p>The same as SARS but trained using a class balance approach where each training batch samples an equal number of positive and negative molecules. Due to the extreme class imbalance of AID1706 (0.1% positive, 99.9% negative), this class balance approach encourages the model to produce predictions in a more reasonable range rather than predicting extremely low probabilities for almost all molecules (due to the weight of the negatives).</p>
-    
+
+    <h4>AMU SARS-CoV-2 <i>in vitro</i></h4>
+    <p>A model trained to predict the probability that a molecule will inhibit SARS-CoV-2 replication <i>in vitro</i>. This model was trained on data from <a href="https://www.biorxiv.org/content/10.1101/2020.04.03.023846v1"><i>In vitro</i> screening of a FDA approved chemical library reveals potential inhibitors of SARS-CoV-2 replication</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/amu_sars_cov_2_in_vitro.csv">here</a>). The model is an ensemble of 5 chemprop models augmented with RDKit features and with optimized hyperparameters.</p>
+
     <form enctype="multipart/form-data" method="POST">         <!--Model checkpoint selector-->         <h5>Model checkpoint</h5>         <select name="checkpointName" required>             {% for checkpoint in checkpoints %}                 <option value="{{ checkpoint[0] }}">{{ checkpoint[1] }}</option>             {% endfor%}
 
 
