@@ -1,8 +1,7 @@
-from argparse import Namespace
 import csv
 from logging import Logger
 import os
-from pprint import pformat
+import sys
 from typing import List
 
 import numpy as np
@@ -15,15 +14,16 @@ from torch.optim.lr_scheduler import ExponentialLR
 from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
 from .train import train
-from chemprop.data import StandardScaler
+from chemprop.args import TrainArgs
+from chemprop.data import StandardScaler, MoleculeDataLoader
 from chemprop.data.utils import get_class_sizes, get_data, get_task_names, split_data
-from chemprop.models import build_model
+from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, get_metric_func, load_checkpoint,\
-    makedirs, save_checkpoint
+    makedirs, save_checkpoint, save_smiles_splits
 
 
-def run_training(args: Namespace, logger: Logger = None) -> List[float]:
+def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     """
     Trains a model and returns test scores on the model checkpoint with the highest validation score.
 
@@ -36,21 +36,23 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     else:
         debug = info = print
 
-    # Set GPU
-    if args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-
     # Print command line
     debug('Command line')
-    debug(args.command_line)
+    debug(f'python {" ".join(sys.argv)}')
 
     # Print args
     debug('Args')
-    debug(pformat(vars(args)))
+    debug(args)
+
+    # Save args
+    args.save(os.path.join(args.save_dir, 'args.json'))
+
+    # Set pytorch seed for random initial weights
+    torch.manual_seed(args.pytorch_seed)
 
     # Get data
     debug('Loading data')
-    args.task_names = get_task_names(args.data_path)
+    args.task_names = args.target_columns or get_task_names(args.data_path)
     data = get_data(path=args.data_path, args=args, logger=logger)
     args.num_tasks = data.num_tasks()
     args.features_size = data.features_size()
@@ -66,7 +68,7 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     if args.separate_val_path and args.separate_test_path:
         train_data = data
     elif args.separate_val_path:
-        train_data, _, test_data = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.2, 0.0), seed=args.seed, args=args, logger=logger)
+        train_data, _, test_data = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.0, 0.2), seed=args.seed, args=args, logger=logger)
     elif args.separate_test_path:
         train_data, val_data, _ = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.2, 0.0), seed=args.seed, args=args, logger=logger)
     else:
@@ -80,36 +82,13 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
                   f'{", ".join(f"{cls}: {size * 100:.2f}%" for cls, size in enumerate(task_class_sizes))}')
 
     if args.save_smiles_splits:
-        with open(args.data_path, 'r') as f:
-            reader = csv.reader(f)
-            header = next(reader)
-
-            lines_by_smiles = {}
-            indices_by_smiles = {}
-            for i, line in enumerate(reader):
-                smiles = line[0]
-                lines_by_smiles[smiles] = line
-                indices_by_smiles[smiles] = i
-
-        all_split_indices = []
-        for dataset, name in [(train_data, 'train'), (val_data, 'val'), (test_data, 'test')]:
-            with open(os.path.join(args.save_dir, name + '_smiles.csv'), 'w') as f:
-                writer = csv.writer(f)
-                writer.writerow(['smiles'])
-                for smiles in dataset.smiles():
-                    writer.writerow([smiles])
-            with open(os.path.join(args.save_dir, name + '_full.csv'), 'w') as f:
-                writer = csv.writer(f)
-                writer.writerow(header)
-                for smiles in dataset.smiles():
-                    writer.writerow(lines_by_smiles[smiles])
-            split_indices = []
-            for smiles in dataset.smiles():
-                split_indices.append(indices_by_smiles[smiles])
-                split_indices = sorted(split_indices)
-            all_split_indices.append(split_indices)
-        with open(os.path.join(args.save_dir, 'split_indices.pckl'), 'wb') as f:
-            pickle.dump(all_split_indices, f)
+        save_smiles_splits(
+            train_data=train_data,
+            val_data=val_data,
+            test_data=test_data,
+            data_path=args.data_path,
+            save_dir=args.save_dir
+        )
 
     if args.features_scaling:
         features_scaler = train_data.normalize_features(replace_nan_token=0)
@@ -144,6 +123,37 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
     else:
         sum_test_preds = np.zeros((len(test_smiles), args.num_tasks))
 
+    # Automatically determine whether to cache
+    if len(data) <= args.cache_cutoff:
+        cache = True
+        num_workers = 0
+    else:
+        cache = False
+        num_workers = args.num_workers
+
+    # Create data loaders
+    train_data_loader = MoleculeDataLoader(
+        dataset=train_data,
+        batch_size=args.batch_size,
+        num_workers=num_workers,
+        cache=cache,
+        class_balance=args.class_balance,
+        shuffle=True,
+        seed=args.seed
+    )
+    val_data_loader = MoleculeDataLoader(
+        dataset=val_data,
+        batch_size=args.batch_size,
+        num_workers=num_workers,
+        cache=cache
+    )
+    test_data_loader = MoleculeDataLoader(
+        dataset=test_data,
+        batch_size=args.batch_size,
+        num_workers=num_workers,
+        cache=cache
+    )
+
     # Train ensemble of models
     for model_idx in range(args.ensemble_size):
         # Tensorboard writer
@@ -153,19 +163,20 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
             writer = SummaryWriter(log_dir=save_dir)
         except:
             writer = SummaryWriter(logdir=save_dir)
+
         # Load/build model
         if args.checkpoint_paths is not None:
             debug(f'Loading model {model_idx} from {args.checkpoint_paths[model_idx]}')
-            model = load_checkpoint(args.checkpoint_paths[model_idx], current_args=args, logger=logger)
+            model = load_checkpoint(args.checkpoint_paths[model_idx], logger=logger)
         else:
             debug(f'Building model {model_idx}')
-            model = build_model(args)
+            model = MoleculeModel(args)
 
         debug(model)
         debug(f'Number of parameters = {param_count(model):,}')
         if args.cuda:
             debug('Moving model to cuda')
-            model = model.cuda()
+        model = model.to(args.device)
 
         # Ensure that model is saved in correct location for evaluation if 0 epochs
         save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
@@ -184,7 +195,7 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
 
             n_iter = train(
                 model=model,
-                data=train_data,
+                data_loader=train_data_loader,
                 loss_func=loss_func,
                 optimizer=optimizer,
                 scheduler=scheduler,
@@ -197,10 +208,9 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
                 scheduler.step()
             val_scores = evaluate(
                 model=model,
-                data=val_data,
+                data_loader=val_data_loader,
                 num_tasks=args.num_tasks,
                 metric_func=metric_func,
-                batch_size=args.batch_size,
                 dataset_type=args.dataset_type,
                 scaler=scaler,
                 logger=logger
@@ -225,12 +235,11 @@ def run_training(args: Namespace, logger: Logger = None) -> List[float]:
 
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
-        model = load_checkpoint(os.path.join(save_dir, 'model.pt'), cuda=args.cuda, logger=logger)
+        model = load_checkpoint(os.path.join(save_dir, 'model.pt'), device=args.device, logger=logger)
         
         test_preds = predict(
             model=model,
-            data=test_data,
-            batch_size=args.batch_size,
+            data_loader=test_data_loader,
             scaler=scaler
         )
         test_scores = evaluate_predictions(

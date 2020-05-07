@@ -1,10 +1,11 @@
-from argparse import Namespace
 from typing import List, Union
 
+import numpy as np
+from rdkit import Chem
 import torch
 import torch.nn as nn
-import numpy as np
 
+from chemprop.args import TrainArgs
 from chemprop.features import BatchMolGraph, get_atom_fdim, get_bond_fdim, mol2graph
 from chemprop.nn_utils import index_select_ND, get_activation_function
 
@@ -12,25 +13,27 @@ from chemprop.nn_utils import index_select_ND, get_activation_function
 class MPNEncoder(nn.Module):
     """A message passing neural network for encoding a molecule."""
 
-    def __init__(self, args: Namespace, atom_fdim: int, bond_fdim: int):
+    def __init__(self, args: TrainArgs, atom_fdim: int, bond_fdim: int):
         """Initializes the MPNEncoder.
 
         :param args: Arguments.
         :param atom_fdim: Atom features dimension.
         :param bond_fdim: Bond features dimension.
+        :param atom_messages: Whether to use atoms to pass messages instead of bonds.
         """
         super(MPNEncoder, self).__init__()
         self.atom_fdim = atom_fdim
         self.bond_fdim = bond_fdim
+        self.atom_messages = args.atom_messages
         self.hidden_size = args.hidden_size
         self.bias = args.bias
         self.depth = args.depth
         self.dropout = args.dropout
         self.layers_per_message = 1
         self.undirected = args.undirected
-        self.atom_messages = args.atom_messages
         self.features_only = args.features_only
         self.use_input_features = args.use_input_features
+        self.device = args.device
         self.args = args
 
         if self.features_only:
@@ -70,24 +73,16 @@ class MPNEncoder(nn.Module):
         :return: A PyTorch tensor of shape (num_molecules, hidden_size) containing the encoding of each molecule.
         """
         if self.use_input_features:
-            features_batch = torch.from_numpy(np.stack(features_batch)).float()
-
-            if self.args.cuda:
-                features_batch = features_batch.cuda()
+            features_batch = torch.from_numpy(np.stack(features_batch)).float().to(self.device)
 
             if self.features_only:
                 return features_batch
 
-        f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope = mol_graph.get_components()
+        f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope = mol_graph.get_components(atom_messages=self.atom_messages)
+        f_atoms, f_bonds, a2b, b2a, b2revb = f_atoms.to(self.device), f_bonds.to(self.device), a2b.to(self.device), b2a.to(self.device), b2revb.to(self.device)
 
         if self.atom_messages:
-            a2a = mol_graph.get_a2a()
-
-        if self.args.cuda or next(self.parameters()).is_cuda:
-            f_atoms, f_bonds, a2b, b2a, b2revb = f_atoms.cuda(), f_bonds.cuda(), a2b.cuda(), b2a.cuda(), b2revb.cuda()
-
-            if self.atom_messages:
-                a2a = a2a.cuda()
+            a2a = mol_graph.get_a2a().to(self.device)
 
         # Input
         if self.atom_messages:
@@ -142,7 +137,7 @@ class MPNEncoder(nn.Module):
         if self.use_input_features:
             features_batch = features_batch.to(mol_vecs)
             if len(features_batch.shape) == 1:
-                features_batch = features_batch.view([1,features_batch.shape[0]])
+                features_batch = features_batch.view([1, features_batch.shape[0]])
             mol_vecs = torch.cat([mol_vecs, features_batch], dim=1)  # (num_molecules, hidden_size)
 
         return mol_vecs  # num_molecules x hidden
@@ -152,37 +147,34 @@ class MPN(nn.Module):
     """A message passing neural network for encoding a molecule."""
 
     def __init__(self,
-                 args: Namespace,
+                 args: TrainArgs,
                  atom_fdim: int = None,
-                 bond_fdim: int = None,
-                 graph_input: bool = False):
+                 bond_fdim: int = None):
         """
         Initializes the MPN.
 
         :param args: Arguments.
         :param atom_fdim: Atom features dimension.
         :param bond_fdim: Bond features dimension.
-        :param graph_input: If true, expects BatchMolGraph as input. Otherwise expects a list of smiles strings as input.
         """
         super(MPN, self).__init__()
         self.args = args
-        self.atom_fdim = atom_fdim or get_atom_fdim(args)
-        self.bond_fdim = bond_fdim or get_bond_fdim(args) + (not args.atom_messages) * self.atom_fdim
-        self.graph_input = graph_input
+        self.atom_fdim = atom_fdim or get_atom_fdim()
+        self.bond_fdim = bond_fdim or get_bond_fdim(atom_messages=args.atom_messages)
         self.encoder = MPNEncoder(self.args, self.atom_fdim, self.bond_fdim)
 
     def forward(self,
-                batch: Union[List[str], BatchMolGraph],
+                batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
                 features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
         """
         Encodes a batch of molecular SMILES strings.
 
-        :param batch: A list of SMILES strings or a BatchMolGraph (if self.graph_input is True).
+        :param batch: A list of SMILES strings, a list of RDKit molecules, or a BatchMolGraph.
         :param features_batch: A list of ndarrays containing additional features.
         :return: A PyTorch tensor of shape (num_molecules, hidden_size) containing the encoding of each molecule.
         """
-        if not self.graph_input:  # if features only, batch won't even be used
-            batch = mol2graph(batch, self.args)
+        if type(batch) != BatchMolGraph:
+            batch = mol2graph(batch)
 
         output = self.encoder.forward(batch, features_batch)
 

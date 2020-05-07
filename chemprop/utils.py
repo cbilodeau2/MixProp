@@ -1,8 +1,10 @@
+from argparse import Namespace
+import csv
 import logging
 import math
 import os
+import pickle
 from typing import Callable, List, Tuple, Union
-from argparse import Namespace
 
 from sklearn.metrics import auc, mean_absolute_error, mean_squared_error, precision_recall_curve, r2_score,\
     roc_auc_score, accuracy_score, log_loss
@@ -11,8 +13,9 @@ import torch.nn as nn
 from torch.optim import Adam, Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
-from chemprop.data import StandardScaler
-from chemprop.models import build_model, MoleculeModel
+from chemprop.args import TrainArgs
+from chemprop.data import StandardScaler, MoleculeDataset
+from chemprop.models import MoleculeModel
 from chemprop.nn_utils import NoamLR
 
 
@@ -36,16 +39,20 @@ def save_checkpoint(path: str,
                     model: MoleculeModel,
                     scaler: StandardScaler = None,
                     features_scaler: StandardScaler = None,
-                    args: Namespace = None):
+                    args: TrainArgs = None):
     """
     Saves a model checkpoint.
 
     :param model: A MoleculeModel.
     :param scaler: A StandardScaler fitted on the data.
     :param features_scaler: A StandardScaler fitted on the features.
-    :param args: Arguments namespace.
+    :param args: Arguments.
     :param path: Path where checkpoint will be saved.
     """
+    # Convert args to namespace for backwards compatibility
+    if args is not None:
+        args = Namespace(**args.as_dict())
+
     state = {
         'args': args,
         'state_dict': model.state_dict(),
@@ -62,31 +69,32 @@ def save_checkpoint(path: str,
 
 
 def load_checkpoint(path: str,
-                    current_args: Namespace = None,
-                    cuda: bool = None,
+                    device: torch.device = None,
                     logger: logging.Logger = None) -> MoleculeModel:
     """
     Loads a model checkpoint.
 
     :param path: Path where checkpoint is saved.
-    :param current_args: The current arguments. Replaces the arguments loaded from the checkpoint if provided.
-    :param cuda: Whether to move model to cuda.
+    :param device: Device where the model will be moved.
     :param logger: A logger.
     :return: The loaded MoleculeModel.
     """
-    debug = logger.debug if logger is not None else print
+    if logger is not None:
+        debug, info = logger.debug, logger.info
+    else:
+        debug = info = print
 
     # Load model and args
     state = torch.load(path, map_location=lambda storage, loc: storage)
-    args, loaded_state_dict = state['args'], state['state_dict']
+    args = TrainArgs()
+    args.from_dict(vars(state['args']), skip_unsettable=True)
+    loaded_state_dict = state['state_dict']
 
-    if current_args is not None:
-        args = current_args
-
-    args.cuda = cuda if cuda is not None else args.cuda
+    if device is not None:
+        args.device = device
 
     # Build model
-    model = build_model(args)
+    model = MoleculeModel(args)
     model_state_dict = model.state_dict()
 
     # Skip missing parameters and parameters of mismatched size
@@ -94,11 +102,11 @@ def load_checkpoint(path: str,
     for param_name in loaded_state_dict.keys():
 
         if param_name not in model_state_dict:
-            debug(f'Pretrained parameter "{param_name}" cannot be found in model parameters.')
+            info(f'Warning: Pretrained parameter "{param_name}" cannot be found in model parameters.')
         elif model_state_dict[param_name].shape != loaded_state_dict[param_name].shape:
-            debug(f'Pretrained parameter "{param_name}" '
-                  f'of shape {loaded_state_dict[param_name].shape} does not match corresponding '
-                  f'model parameter of shape {model_state_dict[param_name].shape}.')
+            info(f'Warning: Pretrained parameter "{param_name}" '
+                 f'of shape {loaded_state_dict[param_name].shape} does not match corresponding '
+                 f'model parameter of shape {model_state_dict[param_name].shape}.')
         else:
             debug(f'Loading pretrained parameter "{param_name}".')
             pretrained_state_dict[param_name] = loaded_state_dict[param_name]
@@ -107,9 +115,9 @@ def load_checkpoint(path: str,
     model_state_dict.update(pretrained_state_dict)
     model.load_state_dict(model_state_dict)
 
-    if cuda:
+    if args.cuda:
         debug('Moving model to cuda')
-        model = model.cuda()
+    model = model.to(args.device)
 
     return model
 
@@ -132,14 +140,17 @@ def load_scalers(path: str) -> Tuple[StandardScaler, StandardScaler]:
     return scaler, features_scaler
 
 
-def load_args(path: str) -> Namespace:
+def load_args(path: str) -> TrainArgs:
     """
     Loads the arguments a model was trained with.
 
     :param path: Path where model checkpoint is saved.
-    :return: The arguments Namespace that the model was trained with.
+    :return: The arguments that the model was trained with.
     """
-    return torch.load(path, map_location=lambda storage, loc: storage)['args']
+    args = TrainArgs()
+    args.from_dict(vars(torch.load(path, map_location=lambda storage, loc: storage)['args']), skip_unsettable=True)
+
+    return args
 
 
 def load_task_names(path: str) -> List[str]:
@@ -152,11 +163,11 @@ def load_task_names(path: str) -> List[str]:
     return load_args(path).task_names
 
 
-def get_loss_func(args: Namespace) -> nn.Module:
+def get_loss_func(args: TrainArgs) -> nn.Module:
     """
     Gets the loss function corresponding to a given dataset type.
 
-    :param args: Namespace containing the dataset type ("classification" or "regression").
+    :param args: Arguments containing the dataset type ("classification" or "regression").
     :return: A PyTorch loss function.
     """
     if args.dataset_type == 'classification':
@@ -256,7 +267,7 @@ def get_metric_func(metric: str) -> Callable[[Union[List[int], List[float]], Lis
     raise ValueError(f'Metric "{metric}" not supported.')
 
 
-def build_optimizer(model: nn.Module, args: Namespace) -> Optimizer:
+def build_optimizer(model: nn.Module, args: TrainArgs) -> Optimizer:
     """
     Builds an Optimizer.
 
@@ -269,7 +280,7 @@ def build_optimizer(model: nn.Module, args: Namespace) -> Optimizer:
     return Adam(params)
 
 
-def build_lr_scheduler(optimizer: Optimizer, args: Namespace, total_epochs: List[int] = None) -> _LRScheduler:
+def build_lr_scheduler(optimizer: Optimizer, args: TrainArgs, total_epochs: List[int] = None) -> _LRScheduler:
     """
     Builds a learning rate scheduler.
 
@@ -326,3 +337,54 @@ def create_logger(name: str, save_dir: str = None, quiet: bool = False) -> loggi
         logger.addHandler(fh_q)
 
     return logger
+
+
+def save_smiles_splits(train_data: MoleculeDataset,
+                       val_data: MoleculeDataset,
+                       test_data: MoleculeDataset,
+                       data_path: str,
+                       save_dir: str) -> None:
+    """
+    Saves indices of train/val/test split as a pickle file.
+
+    :param train_data: Train data.
+    :param val_data: Validation data.
+    :param test_data: Test data.
+    :param data_path: Path to data CSV file.
+    :param save_dir: Path where pickle files will be saved.
+    """
+    makedirs(save_dir)
+
+    with open(data_path) as f:
+        reader = csv.reader(f)
+        header = next(reader)
+
+        lines_by_smiles = {}
+        indices_by_smiles = {}
+        for i, line in enumerate(reader):
+            smiles = line[0]
+            lines_by_smiles[smiles] = line
+            indices_by_smiles[smiles] = i
+
+    all_split_indices = []
+    for dataset, name in [(train_data, 'train'), (val_data, 'val'), (test_data, 'test')]:
+        with open(os.path.join(save_dir, f'{name}_smiles.csv'), 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(['smiles'])
+            for smiles in dataset.smiles():
+                writer.writerow([smiles])
+
+        with open(os.path.join(save_dir, f'{name}_full.csv'), 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            for smiles in dataset.smiles():
+                writer.writerow(lines_by_smiles[smiles])
+
+        split_indices = []
+        for smiles in dataset.smiles():
+            split_indices.append(indices_by_smiles[smiles])
+            split_indices = sorted(split_indices)
+        all_split_indices.append(split_indices)
+
+    with open(os.path.join(save_dir, 'split_indices.pckl'), 'wb') as f:
+        pickle.dump(all_split_indices, f)

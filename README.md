@@ -1,5 +1,13 @@
 # Molecular Property Prediction
-This repository contains message passing neural networks for molecular property prediction as described in the paper [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237).
+This repository contains message passing neural networks for molecular property prediction as described in the paper [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237) and as used in the paper [A Deep Learning Approch to Antibiotic Discovery](https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1).
+
+**Website:** A web prediction interface with some trained chemprop models is available at [chemprop.csail.mit.edu](chemprop.csail.mit.edu).
+
+**Tutorial:** These [slides](https://docs.google.com/presentation/d/14pbd9LTXzfPSJHyXYkfLxnK8Q80LhVnjImg8a3WqCRM/edit?usp=sharing) provide a chemprop tutorial and highlight recent additions as of April 28th, 2020.
+
+## COVID-19 Update
+
+Please see [aicures.mit.edu](https://aicures.mit.edu) and the associated [data GitHub repo](https://github.com/yangkevin2/coronavirus_data) for information about our recent efforts to use chemprop to identify drug candidates for treating COVID-19.
 
 ## Table of Contents
 
@@ -26,7 +34,9 @@ This repository contains message passing neural networks for molecular property 
 
 ## Requirements
 
-While it is possible to run all of the code on a CPU-only machine, GPUs make training significantly faster. To run with GPUs, you will need:
+For small datasets (~1000 molecules), it is possible to train models within a few minutes on a standard laptop with CPUs only. However, for larger datasets and larger `chemprop` models, we recommend using a GPU for significantly faster training.
+
+To use `chemprop` with GPUs, you will need:
  * cuda >= 8.0
  * cuDNN
 
@@ -39,10 +49,7 @@ The easiest way to install the `chemprop` dependencies is via conda. Here are th
 1. Install Miniconda from [https://conda.io/miniconda.html](https://conda.io/miniconda.html)
 2. `cd /path/to/chemprop`
 3. `conda env create -f environment.yml`
-4. `source activate chemprop` (or `conda activate chemprop` for newer versions of conda)
-5. (Optional) `pip install git+https://github.com/bp-kelley/descriptastorus`
-
-The optional `descriptastorus` package is only necessary if you plan to incorporate computed RDKit features into your model (see [Additional Features](#additional-features)). The addition of these features improves model performance on some datasets but is not necessary for the base model.
+4. `conda activate chemprop` (or `source activate chemprop` for older versions of conda)
 
 Note that on machines with GPUs, you may need to manually install a GPU-enabled version of PyTorch by following the instructions [here](https://pytorch.org/get-started/locally/).
 
@@ -70,11 +77,11 @@ Then you can use `import chemprop` or `from chemprop import ...` in your other c
 
 **PyTorch GPU:** Although PyTorch is installed automatically along with `chemprop`, you may need to install the GPU version manually. Instructions are available [here](https://pytorch.org/get-started/locally/).
 
-**kyotocabinet**: If you get warning messages about `kyotocabinet` not being installed, it's safe to ignore them.
-   
 ## Web Interface
 
-For those less familiar with the command line, we also have a web interface which allows for basic training and predicting. After installing the dependencies following the instructions above, you can start the web interface in two ways:
+For those less familiar with the command line, we also have a web interface which allows for basic training and predicting. An example of the website (in demo mode with training disabled) is available here: [chemprop.csail.mit.edu](chemprop.csail.mit.edu).
+
+You can start the web interface on your local machine in two ways:
 
 1. Run `python web/run.py` and then navigate to [localhost:5000](http://localhost:5000) in a web browser. This will start the site in development mode.
 2. Run `gunicorn --bind {host}:{port} 'wsgi:build_app()'`. This will start the site in production mode.
@@ -100,6 +107,9 @@ CCOc1ccc2nc(S(N)(=O)=O)sc2c1,0,0,1,,,0,0,1,0,0,0,0
 CCN1C(=O)NC(c2ccccc2)C1=O,0,0,0,0,0,0,0,,0,,0,0
 ...
 ```
+
+By default, it is assumed that the SMILES are in the first column and the targets are in the remaining columns. However, the specific columns containing the SMILES and targets can be specified using the `--smiles_column <column>` and `--target_columns <column_1> <column_2> ...` flags, respectively.
+
 Datasets from [MoleculeNet](http://moleculenet.ai/) and a 450K subset of ChEMBL from [http://www.bioinf.jku.at/research/lsc/index.html](http://www.bioinf.jku.at/research/lsc/index.html) have been preprocessed and are available in `data.tar.gz`. To uncompress them, run `tar xvzf data.tar.gz`.
 
 ## Training
@@ -114,6 +124,8 @@ For example:
 ```
 python train.py --data_path data/tox21.csv --dataset_type classification --save_dir tox21_checkpoints
 ```
+
+A full list of available command-line arguments can be found in [chemprop/args.py](https://github.com/chemprop/chemprop/blob/master/chemprop/args.py).
 
 Notes:
 * The default metric for classification is AUC and the default metric for regression is RMSE. Other metrics may be specified with `--metric <metric>`.
@@ -210,10 +222,10 @@ As shown in the first row, when a molecule is predicted to be non-toxic, we will
 
 smiles | NR-AR | rationale | rationale_score
 | :---: | :---: | :---: | :---: |
-O=[N+]([O-])c1cc(C(F)(F)F)cc([N+](=O)[O-])c1Cl | 0.014 | | | 
-CC1(C)O[C@@H]2C[C@H]3[C@@H]4C[C@H](F)C5=CC(=O)C=C[C@]5(C)[C@H]4[C@@H](O)C[C@]3(C)[C@]2(C(=O)CO)O1 | 0.896 | C[C@]12C=CC(=O)C=C1[CH2:1]C[CH2:1][CH2:1]2 | 0.769 |
-C[C@]12CC[C@H]3[C@@H](CC[C@@]45O[C@@H]4C(O)=C(C#N)C[C@]35C)[C@@H]1CC[C@@H]2O | 0.941 | C[C@]12C[CH:1]=[CH:1][C@H]3O[C@]31CC[C@@H]1[C@@H]2CC[C:1][CH2:1]1 | 0.808 |
-C[C@]12C[C@H](O)[C@H]3[C@@H](CCC4=CC(=O)CC[C@@]43C)[C@@H]1CC[C@]2(O)C(=O)COP(=O)([O-])[O-] | 0.957 | C1C[CH2:1][C:1][C@@H]2[C@@H]1[C@@H]1CC[C:1][C:1]1C[CH2:1]2 | 0.532 | 
+O=\[N+\](\[O-\])c1cc(C(F)(F)F)cc(\[N+\](=O)\[O-\])c1Cl | 0.014 | | | 
+CC1(C)O\[C@@H\]2C\[C@H\]3\[C@@H\]4C\[C@H\](F)C5=CC(=O)C=C\[C@\]5(C)\[C@H\]4\[C@@H\](O)C\[C@\]3(C)\[C@\]2(C(=O)CO)O1 | 0.896 | C\[C@\]12C=CC(=O)C=C1\[CH2:1\]C\[CH2:1\]\[CH2:1\]2 | 0.769 |
+C\[C@\]12CC\[C@H\]3\[C@@H\](CC\[C@@\]45O\[C@@H\]4C(O)=C(C#N)C\[C@\]35C)\[C@@H\]1CC\[C@@H\]2O | 0.941 | C\[C@\]12C\[CH:1\]=\[CH:1\]\[C@H\]3O\[C@\]31CC\[C@@H\]1\[C@@H\]2CC\[C:1\]\[CH2:1\]1 | 0.808 |
+C\[C@\]12C\[C@H\](O)\[C@H\]3\[C@@H\](CCC4=CC(=O)CC\[C@@\]43C)\[C@@H\]1CC\[C@\]2(O)C(=O)COP(=O)(\[O-\])\[O-\] | 0.957 | C1C\[CH2:1\]\[C:1\]\[C@@H\]2\[C@@H\]1\[C@@H\]1CC\[C:1\]\[C:1\]1C\[CH2:1\]2</pre> | 0.532 | 
 
 Our interpretation script explains model prediction one property at a time. `--property_id 1` tells the script to provide explanation for the first property in the dataset (which is NR-AR). In a multi-task training setting, you will need to change `--property_id` to provide explanation for each property in the dataset.
 
