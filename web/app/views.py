@@ -455,7 +455,6 @@ def delete_data(dataset: int):
 
 
 @app.route('/checkpoints')
-@check_not_demo
 def checkpoints():
     """Renders the checkpoints page."""
     checkpoint_upload_warnings, checkpoint_upload_errors = get_upload_warnings_errors('checkpoint')
@@ -538,7 +537,6 @@ def upload_checkpoint(return_page: str):
 
 
 @app.route('/checkpoints/download/<int:checkpoint>')
-@check_not_demo
 def download_checkpoint(checkpoint: int):
     """
     Downloads a zip of model .pt files.
