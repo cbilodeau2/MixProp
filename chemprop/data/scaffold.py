@@ -1,6 +1,6 @@
 from collections import defaultdict
 import logging
-import random
+from random import Random
 from typing import Dict, List, Set, Tuple, Union
 
 from rdkit import Chem
@@ -74,6 +74,9 @@ def scaffold_split(data: MoleculeDataset,
     # Map from scaffold to index in the data
     scaffold_to_indices = scaffold_to_smiles(data.mols(), use_indices=True)
 
+    # Seed randomness
+    random = Random(seed)
+
     if balanced:  # Put stuff that's bigger than half the val/test size into train, rest just order randomly
         index_sets = list(scaffold_to_indices.values())
         big_index_sets = []
@@ -108,8 +111,9 @@ def scaffold_split(data: MoleculeDataset,
                      f'train scaffolds = {train_scaffold_count:,} | '
                      f'val scaffolds = {val_scaffold_count:,} | '
                      f'test scaffolds = {test_scaffold_count:,}')
-    
-    log_scaffold_stats(data, index_sets, logger=logger)
+
+    if logger is not None:
+        log_scaffold_stats(data, index_sets, logger=logger)
 
     # Map from indices to data
     train = [data[i] for i in train]

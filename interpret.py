@@ -1,12 +1,10 @@
 import math
-import os
 from typing import Callable, Dict, List, Set, Tuple
 
 import numpy as np
 from rdkit import Chem
-import torch
-from tap import Tap  # pip install typed-argument-parser (https://github.com/swansonk14/typed-argument-parser)
 
+from chemprop.args import InterpretArgs
 from chemprop.data import MoleculeDataLoader, MoleculeDataset
 from chemprop.data.utils import get_data_from_smiles, get_header, get_smiles
 from chemprop.train import predict
@@ -17,44 +15,23 @@ MIN_ATOMS = 15
 C_PUCT = 10
 
 
-class Args(Tap):
-    data_path: str
-    checkpoint_dir: str
-    rollout: int = 20
-    c_puct: float = 10.0
-    max_atoms: int = 20
-    min_atoms: int = 8
-    prop_delta: float = 0.5
-    property_id: int = 1
-    no_cuda: bool = False
-    gpu: int = 0
-
-    @property
-    def device(self) -> torch.device:
-        if not self.cuda:
-            return torch.device('cpu')
-
-        return torch.device('cuda', self.gpu)
-
-    @property
-    def cuda(self) -> bool:
-        return not self.no_cuda and torch.cuda.is_available()
-
-
 class ChempropModel:
-    def __init__(self, checkpoint_dir: str, device: torch.device) -> None:
-        self.checkpoints = []
-        for root, _, files in os.walk(checkpoint_dir):
-            for fname in files:
-                if fname.endswith('.pt'):
-                    fname = os.path.join(root, fname)
-                    self.scaler, self.features_scaler = load_scalers(fname)
-                    self.train_args = load_args(fname)
-                    model = load_checkpoint(fname, device=device)
-                    self.checkpoints.append(model)
+    def __init__(self, args: InterpretArgs) -> None:
+        self.args = args
+        self.train_args = load_args(args.checkpoint_paths[0])
+
+        # If features were used during training, they must be used when predicting
+        if ((self.train_args.features_path is not None or self.train_args.features_generator is not None)
+                and args.features_generator is None):
+            raise ValueError('Features were used during training so they must be specified again during prediction '
+                             'using the same type of features as before (with --features_generator <generator> '
+                             'and using --no_features_scaling if applicable).')
+
+        self.scaler, self.features_scaler = load_scalers(args.checkpoint_paths[0])
+        self.checkpoints = [load_checkpoint(checkpoint_path, device=args.device) for checkpoint_path in args.checkpoint_paths]
 
     def __call__(self, smiles: List[str], batch_size: int = 500) -> List[List[float]]:
-        test_data = get_data_from_smiles(smiles=smiles, skip_invalid_smiles=False, features_generator=self.train_args.features_generator)
+        test_data = get_data_from_smiles(smiles=smiles, skip_invalid_smiles=False, features_generator=self.args.features_generator)
         valid_indices = [i for i in range(len(test_data)) if test_data[i].mol is not None]
         test_data = MoleculeDataset([test_data[i] for i in valid_indices])
 
@@ -242,9 +219,9 @@ def mcts(smiles: str,
 
 
 if __name__ == "__main__":
-    args = Args().parse_args()
+    args = InterpretArgs().parse_args()
 
-    chemprop_model = ChempropModel(checkpoint_dir=args.checkpoint_dir, device=args.device)
+    chemprop_model = ChempropModel(args)
 
     def scoring_function(smiles: List[str]) -> List[float]:
         return chemprop_model(smiles)[:, args.property_id - 1]
@@ -252,7 +229,7 @@ if __name__ == "__main__":
     C_PUCT = args.c_puct
     MIN_ATOMS = args.min_atoms
 
-    all_smiles = get_smiles(path=args.data_path)
+    all_smiles = get_smiles(path=args.data_path, smiles_column=args.smiles_column)
     header = get_header(path=args.data_path)
 
     property_name = header[args.property_id] if len(header) > args.property_id else 'score'
