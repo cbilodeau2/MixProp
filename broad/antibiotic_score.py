@@ -2,20 +2,23 @@ from typing import Iterable, List
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from rdkit import Chem
+from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 from tap import Tap
+from tqdm import tqdm
 
 
 class Args(Tap):
     data_path: str
-    smiles_column: str = 'canonical_smiles'  # assumes canonicalized
     antibiotics_path: str
+    save_path: str
+    smiles_column: str = 'canonical_smiles'  # assumes canonicalized
     bin_size: int = 50000
-    save_path: str = 'hist.png'
 
 
 def antibiotic_score(smiles: Iterable[str]) -> List[float]:
     """Higher score means more antibiotic-like"""
-    return [len(smile) for smile in smiles]
+    return [CalcNumRotatableBonds(Chem.MolFromSmiles(smile)) for smile in tqdm(smiles)]
 
 
 def run_antibiotic_score(args: Args) -> None:
@@ -53,11 +56,9 @@ def run_antibiotic_score(args: Args) -> None:
     plt.ylabel('Proportion of antibiotics')
     plt.xlabel(f'Rank according to antibiotic score (intervals of {args.bin_size:,})')
     plt.title('Histogram with proprortion of antibiotics vs antibiotic score rank')
-    plt.show()
-    # plt.savefig(args.save_path)
+    plt.savefig(args.save_path)
+    # plt.show()
 
 
 if __name__ == '__main__':
     run_antibiotic_score(Args().parse_args())
-    # plt.bar([1, 2, 3], [1, 2, 3])
-    # plt.savefig('hist.png')
