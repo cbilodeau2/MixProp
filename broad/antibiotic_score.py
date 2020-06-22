@@ -1,4 +1,6 @@
-from typing import Iterable, List
+"""See https://www.nature.com/articles/nature22308 and https://www.nature.com/articles/s41564-019-0604-5 and https://github.com/HergenrotherLab/entry-cli"""
+
+from functools import partial
 from typing_extensions import Literal
 
 import matplotlib.pyplot as plt
@@ -14,7 +16,7 @@ class Args(Tap):
     data_path: str
     antibiotics_path: str
     save_path: str
-    score_function: Literal['rotatable_bonds', 'amine', 'smiles_len'] = 'rotatable_bonds'
+    score_function: Literal['rotatable_bonds', 'amine', 'primary_amine', 'carboxylic_acid', 'smiles_len']
     smiles_column: str = 'canonical_smiles'  # assumes canonicalized
     bin_size: int = 25000
 
@@ -23,15 +25,23 @@ def num_rotatable_bonds(smiles: str) -> int:
     return CalcNumRotatableBonds(Chem.MolFromSmiles(smiles))
 
 
-def has_amine(smiles: str) -> bool:
+def has_amine(smiles: str, primary: bool = True, secondary: bool = True, tertiary: bool = True) -> bool:
     mol = Chem.MolFromSmiles(smiles)
 
     num_primary = Fragments.fr_NH2(mol)
     num_secondary = Fragments.fr_NH1(mol)
     num_tertiary = Fragments.fr_NH0(mol)
-    num_amines = num_primary + num_secondary + num_tertiary
+    num_amines = primary * num_primary + secondary * num_secondary + tertiary * num_tertiary
 
     return num_amines > 0
+
+
+def has_carboxylic_acid(smiles: str) -> bool:
+    mol = Chem.MolFromSmiles(smiles)
+
+    num_coo = Fragments.fr_COO(mol)
+
+    return num_coo > 0
 
 
 def run_antibiotic_score(args: Args) -> None:
@@ -39,7 +49,11 @@ def run_antibiotic_score(args: Args) -> None:
     if args.score_function == 'rotatable_bonds':
         score_function = num_rotatable_bonds
     elif args.score_function == 'amine':
-        score_function = has_amine
+        score_function = partial(has_amine, primary=True, secondary=True, tertiary=True)
+    elif args.score_function == 'primary_amine':
+        score_function = partial(has_amine, primary=True, secondary=False, tertiary=False)
+    elif args.score_function == 'carboxylic_acid':
+        score_function = has_carboxylic_acid
     elif args.score_function == 'smiles_len':
         score_function = len
     else:
@@ -62,7 +76,8 @@ def run_antibiotic_score(args: Args) -> None:
     data.sort_values(by='score', ascending=False, inplace=True)
 
     # Compute and plot histogram
-    categorical_score = args.score_function in {'rotatable_bonds', 'amine', 'smiles_len'}
+    # TODO: adapt for non-categorical
+    categorical_score = True
 
     if categorical_score:
         values = sorted(data['score'].unique())
@@ -70,15 +85,21 @@ def run_antibiotic_score(args: Args) -> None:
 
         for value in values:
             bin_data = data[data['score'] == value]
-            proportion = sum(bin_data['is_antibiotic']) / len(bin_data)
-            proportions.append(proportion)
+            num_with_value = len(bin_data)
+            num_with_value_antibiotic = sum(bin_data['is_antibiotic'])
+            proportion_antibiotic = num_with_value_antibiotic / num_with_value
+            proportions.append(proportion_antibiotic)
+
+            print(f'Value={value}')
+            print(f'Num with value={num_with_value:,}')
+            print(f'Num with value and antibiotic={num_with_value_antibiotic:,} ({100 * proportion_antibiotic:.4f}%)')
 
         x_vals = list(range(len(values)))
         plt.bar(x_vals, proportions)
         plt.xticks(x_vals, values)
         plt.ylabel('Proportion of antibiotics')
         plt.xlabel(args.score_function)
-        plt.title(f'Histogram with proprortion of antibiotics vs {args.score_function}')
+        plt.title(f'Histogram with proportion of antibiotics vs {args.score_function}')
         plt.savefig(args.save_path)
     else:
 
