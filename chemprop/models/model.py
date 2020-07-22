@@ -26,6 +26,7 @@ class MoleculeModel(nn.Module):
         self.classification = args.dataset_type == 'classification'
         self.multiclass = args.dataset_type == 'multiclass'
         self.featurizer = featurizer
+        self.device = args.device
 
         self.output_size = args.num_tasks
         if self.multiclass:
@@ -123,7 +124,7 @@ class MoleculeModel(nn.Module):
         """
         # Embed taxon
         if self.lineage_embedding_type == 'taxon_only':
-            taxons = torch.LongTensor([lineage[-1] for lineage in lineage_batch])
+            taxons = torch.LongTensor([lineage[-1] for lineage in lineage_batch]).to(self.device)
             taxon_embedding = self.taxon_embedder(taxons)
 
             return taxon_embedding
@@ -135,7 +136,7 @@ class MoleculeModel(nn.Module):
             lineage_batch[i] = [0] * (max_length - len(lineage)) + lineage
 
         # Embed lineage
-        lineage_batch = torch.LongTensor(lineage_batch)
+        lineage_batch = torch.LongTensor(lineage_batch).to(self.device)
         lineage_embeddings = self.taxon_embedder(lineage_batch)
 
         # Embed lineage
