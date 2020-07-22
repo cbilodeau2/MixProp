@@ -140,29 +140,40 @@ class MoleculeModel(nn.Module):
 
             return taxon_embedding
 
-        # Pad lineages with padding
-        lengths = [len(lineage) for lineage in lineage_batch]
-        max_length = max(lengths)
+        import ipdb; ipdb.set_trace()
 
-        for i, lineage in enumerate(lineage_batch):
-            lineage_batch[i] = [0] * (max_length - len(lineage)) + lineage
+        # Determine lengths
+        lengths = torch.FloatTensor([len(lineage) for lineage in lineage_batch]).to(self.device)
 
-        # Embed lineage
-        lineage_batch = torch.LongTensor(lineage_batch).to(self.device)
+        # Tensorize lineages
+        lineage_batch = [torch.LongTensor(lineage).to(self.device) for lineage in lineage_batch]
+
+        # Pad lineages
+        lineage_batch = torch.nn.utils.rnn.pad_sequence(lineage_batch, batch_first=True, padding_value=0.0)
+
+        # Embed lineages
         lineage_embeddings = self.taxon_embedder(lineage_batch)
 
-        # Embed lineage
+        # Post-process lineage embeddings
         if self.lineage_embedding_type in ['average_lineage', 'sum_lineage']:
             sum_lineage_embedding = torch.sum(lineage_embeddings, dim=1)
 
             if self.lineage_embedding_type == 'sum_lineage':
                 return sum_lineage_embedding
 
-            lengths = torch.FloatTensor(lengths).unsqueeze(dim=1)
-            average_lineage_embedding = sum_lineage_embedding / lengths
+            average_lineage_embedding = sum_lineage_embedding / lengths.unsqueeze(dim=1)
 
             return average_lineage_embedding
         elif self.lineage_embedding_type == 'rnn_lineage':
+            # Pack lineage embeddings
+            lineage_embeddings = torch.nn.utils.rnn.pack_padded_sequence(
+                input=lineage_embeddings,
+                lengths=lengths,
+                batch_first=True,
+                enforce_sorted=False
+            )
+
+            # Run RNN
             _, (hidden, _) = self.taxon_rnn(lineage_embeddings)
             hidden = hidden.sum(dim=0)
 
