@@ -220,7 +220,7 @@ def get_data(path: str,
         data.set_lineages(taxon_to_index)
 
         # Keep track of taxon_to_index in args
-        args.num_taxons = len(taxon_to_index)
+        args.num_taxons = len(taxon_to_index) + 1  # Plus 1 for padding index
 
     # Filter out invalid SMILES
     if skip_invalid_smiles:
