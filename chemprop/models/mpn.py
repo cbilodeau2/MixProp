@@ -72,6 +72,9 @@ class MPNEncoder(nn.Module):
         :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: A PyTorch tensor of shape :code:`(num_molecules, hidden_size)` containing the encoding of each molecule.
         """
+        if lineage_batch is not None:
+            lineage_batch = lineage_batch.to(self.device)
+
         if self.use_input_features:
             features_batch = torch.from_numpy(np.stack(features_batch)).float().to(self.device)
 

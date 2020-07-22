@@ -257,6 +257,9 @@ class MoleculeDataset(Dataset):
 
         :return: A list of list of integers where each inner list represents the lineage of an organism.
         """
+        if self._data[0].lineage is None:
+            return None
+
         return [d.lineage for d in self._data]
 
     def set_lineages(self, taxon_to_index: Dict[int, int]) -> None:
