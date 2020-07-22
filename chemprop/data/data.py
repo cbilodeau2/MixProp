@@ -22,12 +22,14 @@ class MoleculeDatapoint:
     def __init__(self,
                  smiles: str,
                  targets: List[Optional[float]] = None,
+                 raw_lineage: List[int] = None,
                  row: OrderedDict = None,
                  features: np.ndarray = None,
                  features_generator: List[str] = None):
         """
         :param smiles: The SMILES string for the molecule.
         :param targets: A list of targets for the molecule (contains None for unknown target values).
+        :param raw_lineage: The raw NCBI taxonomy IDs of the lineage of the organism the molecule was tested in.
         :param row: The raw CSV row containing the information for this molecule.
         :param features: A numpy array containing additional features (e.g., Morgan fingerprint).
         :param features_generator: A list of features generators to use.
@@ -37,6 +39,8 @@ class MoleculeDatapoint:
 
         self.smiles = smiles
         self.targets = targets
+        self.raw_lineage = raw_lineage
+        self.lineage = None
         self.row = row
         self.features = features
         self.features_generator = features_generator
@@ -89,6 +93,14 @@ class MoleculeDatapoint:
         :param targets: A list of floats containing the targets.
         """
         self.targets = targets
+
+    def set_lineage(self, taxon_to_index: Dict[int, int]) -> None:
+        """
+        Sets the lineage indices using a map from raw taxonomy ID to the indices used for embedding the taxonomy.
+
+        :param taxon_to_index: A dictionary mapping raw taxonomy IDs to embedding indices.
+        """
+        self.lineage = [taxon_to_index[taxon] for taxon in self.raw_lineage]
 
 
 class MoleculeDataset(Dataset):
@@ -238,6 +250,23 @@ class MoleculeDataset(Dataset):
         assert len(self._data) == len(targets)
         for i in range(len(self._data)):
             self._data[i].set_targets(targets[i])
+
+    def lineages(self) -> List[List[int]]:
+        """
+        Returns a list of lineages containing the indices corresponding to each organism's lineage.
+
+        :return: A list of list of integers where each inner list represents the lineage of an organism.
+        """
+        return [d.lineage for d in self._data]
+
+    def set_lineages(self, taxon_to_index: Dict[int, int]) -> None:
+        """
+        Sets the lineage indices using a map from raw taxonomy ID to the indices used for embedding the taxonomy.
+
+        :param taxon_to_index: A dictionary mapping raw taxonomy IDs to embedding indices.
+        """
+        for d in self._data:
+            d.set_lineage(taxon_to_index)
 
     def sort(self, key: Callable) -> None:
         """

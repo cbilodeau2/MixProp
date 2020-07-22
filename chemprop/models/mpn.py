@@ -61,20 +61,22 @@ class MPNEncoder(nn.Module):
 
     def forward(self,
                 mol_graph: BatchMolGraph,
-                features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
+                features_batch: List[np.ndarray] = None,
+                lineage_batch: torch.FloatTensor = None) -> torch.FloatTensor:
         """
         Encodes a batch of molecular graphs.
 
         :param mol_graph: A :class:`~chemprop.features.featurization.BatchMolGraph` representing
                           a batch of molecular graphs.
         :param features_batch: A list of numpy arrays containing additional features.
+        :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: A PyTorch tensor of shape :code:`(num_molecules, hidden_size)` containing the encoding of each molecule.
         """
         if self.use_input_features:
             features_batch = torch.from_numpy(np.stack(features_batch)).float().to(self.device)
 
             if self.features_only:
-                return features_batch
+                return torch.cat([features_batch, lineage_batch], dim=1)
 
         f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope = mol_graph.get_components(atom_messages=self.atom_messages)
         f_atoms, f_bonds, a2b, b2a, b2revb = f_atoms.to(self.device), f_bonds.to(self.device), a2b.to(self.device), b2a.to(self.device), b2revb.to(self.device)
@@ -131,12 +133,14 @@ class MPNEncoder(nn.Module):
                 mol_vecs.append(mol_vec)
 
         mol_vecs = torch.stack(mol_vecs, dim=0)  # (num_molecules, hidden_size)
-        
+
         if self.use_input_features:
             features_batch = features_batch.to(mol_vecs)
             if len(features_batch.shape) == 1:
                 features_batch = features_batch.view([1, features_batch.shape[0]])
-            mol_vecs = torch.cat([mol_vecs, features_batch], dim=1)  # (num_molecules, hidden_size)
+            mol_vecs = torch.cat([mol_vecs, features_batch, lineage_batch], dim=1)  # (num_molecules, hidden_size)
+        elif lineage_batch is not None:
+            mol_vecs = torch.cat([mol_vecs, lineage_batch], dim=1)  # (num_molecules, hidden_size)
 
         return mol_vecs  # num_molecules x hidden
 
@@ -160,18 +164,20 @@ class MPN(nn.Module):
 
     def forward(self,
                 batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
-                features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
+                features_batch: List[np.ndarray] = None,
+                lineage_batch: torch.FloatTensor = None) -> torch.FloatTensor:
         """
         Encodes a batch of molecules.
 
         :param batch: A list of SMILES, a list of RDKit molecules, or a
                       :class:`~chemprop.features.featurization.BatchMolGraph`.
         :param features_batch: A list of numpy arrays containing additional features.
+        :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: A PyTorch tensor of shape :code:`(num_molecules, hidden_size)` containing the encoding of each molecule.
         """
         if type(batch) != BatchMolGraph:
             batch = mol2graph(batch)
 
-        output = self.encoder.forward(batch, features_batch)
+        output = self.encoder.forward(batch, features_batch, lineage_batch)
 
         return output

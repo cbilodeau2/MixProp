@@ -37,10 +37,15 @@ class MoleculeModel(nn.Module):
         if self.multiclass:
             self.multiclass_softmax = nn.Softmax(dim=2)
 
+        self.lineage_embedding_type = args.lineage_embedding_type
+
         self.create_encoder(args)
         self.create_ffn(args)
 
         initialize_weights(self)
+
+        if args.use_taxon:
+            self.create_lineage_embedding(args)
 
     def create_encoder(self, args: TrainArgs) -> None:
         """
@@ -50,7 +55,7 @@ class MoleculeModel(nn.Module):
         """
         self.encoder = MPN(args)
 
-    def create_ffn(self, args: TrainArgs):
+    def create_ffn(self, args: TrainArgs) -> None:
         """
         Creates the feed-forward layers for the model.
 
@@ -65,6 +70,8 @@ class MoleculeModel(nn.Module):
             first_linear_dim = args.hidden_size
             if args.use_input_features:
                 first_linear_dim += args.features_size
+        if args.use_taxon:
+            first_linear_dim += args.hidden_size
 
         dropout = nn.Dropout(args.dropout)
         activation = get_activation_function(args.activation)
@@ -95,35 +102,88 @@ class MoleculeModel(nn.Module):
         # Create FFN model
         self.ffn = nn.Sequential(*ffn)
 
+    def create_lineage_embedding(self, args: TrainArgs) -> None:
+        """
+        Creates embedding layer(s) to embed the organism lineage.
+
+        :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
+        """
+        self.taxon_embedder = nn.Embedding(
+            num_embeddings=args.num_taxons,
+            embedding_dim=args.hidden_size,
+            padding_idx=0
+        )
+
+    def embed_lineage(self, lineage_batch: List[List[int]]) -> torch.FloatTensor:
+        """
+        Embeds a batch of lineages.
+
+        :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
+        :return: A PyTorch FloatTensor containing lineage embeddings.
+        """
+        # Embed taxon
+        if self.lineage_embedding_type == 'taxon_only':
+            taxons = torch.LongTensor([lineage[-1] for lineage in lineage_batch])
+            taxon_embedding = self.taxon_embedder(taxons)
+
+            return taxon_embedding
+
+        # Pad lineages with padding
+        max_length = max(len(lineage) for lineage in lineage_batch)
+
+        for i, lineage in enumerate(lineage_batch):
+            lineage_batch[i] = [0] * (max_length - len(lineage)) + lineage
+
+        # Embed lineage
+        lineage_batch = torch.LongTensor(lineage_batch)
+        lineage_embeddings = self.taxon_embedder(lineage_batch)
+
+        # Embed lineage
+        if self.lineage_embedding_type == 'average_lineage':
+            average_lineage_embedding = torch.mean(lineage_embeddings, dim=1)
+
+            return average_lineage_embedding
+        elif self.lineage_embedding_type == 'rnn_lineage':
+            raise NotImplementedError
+        else:
+            raise ValueError(f'Lineage embedding type "{self.lineage_embedding_type}" not supported.')
+
     def featurize(self,
                   batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
-                  features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
+                  features_batch: List[np.ndarray] = None,
+                  lineage_batch: List[List[int]] = None) -> torch.FloatTensor:
         """
         Computes feature vectors of the input by running the model except for the last layer.
 
         :param batch: A list of SMILES, a list of RDKit molecules, or a
                       :class:`~chemprop.features.featurization.BatchMolGraph`.
         :param features_batch: A list of numpy arrays containing additional features.
+        :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: The feature vectors computed by the :class:`MoleculeModel`.
         """
-        return self.ffn[:-1](self.encoder(batch, features_batch))
+        return self.ffn[:-1](self.encoder(batch, features_batch, lineage_batch))
 
     def forward(self,
                 batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
-                features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
+                features_batch: List[np.ndarray] = None,
+                lineage_batch: List[List[int]] = None) -> torch.FloatTensor:
         """
         Runs the :class:`MoleculeModel` on input.
 
         :param batch: A list of SMILES, a list of RDKit molecules, or a
                       :class:`~chemprop.features.featurization.BatchMolGraph`.
         :param features_batch: A list of numpy arrays containing additional features.
+        :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: The output of the :class:`MoleculeModel`, which is either property predictions
                  or molecule features if :code:`self.featurizer=True`.
         """
-        if self.featurizer:
-            return self.featurize(batch, features_batch)
+        if lineage_batch is not None:
+            lineage_batch = self.embed_lineage(lineage_batch)
 
-        output = self.ffn(self.encoder(batch, features_batch))
+        if self.featurizer:
+            return self.featurize(batch, features_batch, lineage_batch)
+
+        output = self.ffn(self.encoder(batch, features_batch, lineage_batch))
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:

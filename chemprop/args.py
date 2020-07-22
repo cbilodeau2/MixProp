@@ -139,6 +139,11 @@ class TrainArgs(CommonArgs):
     """
     ignore_columns: List[str] = None
     """Name of the columns to ignore when :code:`target_columns` is not provided."""
+    taxon_column: str = None
+    """
+    Name of the column from which to extract the taxonomy ID.
+    If provided, includes a taxon embedding in the model as determined by :code:`taxon_embedding_type`.
+    """
     dataset_type: Literal['regression', 'classification', 'multiclass']
     """Type of dataset. This determines the loss function used during training."""
     multiclass_num_classes: int = 3
@@ -190,6 +195,10 @@ class TrainArgs(CommonArgs):
     Below this number, caching is used and data loading is sequential.
     Above this number, caching is not used and data loading is parallel.
     """
+    ncbi_dbfile: str = None
+    """Path where NCBI taxonomy sqlite file should loaded from."""
+    ncbi_taxdump_file: str = None
+    """Path where NCIB taxonomy :code:`taxdump.tar.gz` file should be loaded from."""
 
     # Model arguments
     bias: bool = False
@@ -223,6 +232,8 @@ class TrainArgs(CommonArgs):
     """
     ensemble_size: int = 1
     """Number of models in ensemble."""
+    lineage_embedding_type: Literal['taxon_only', 'average_lineage', 'rnn_lineage'] = 'taxon_only'
+    """The type of taxonomy lineage embedding to use. Only applied if :code:`taxon_column` is not None."""
 
     # Training arguments
     epochs: int = 30
@@ -251,6 +262,7 @@ class TrainArgs(CommonArgs):
         self._num_tasks = None
         self._features_size = None
         self._train_data_size = None
+        self._num_taxons = None
 
     @property
     def minimize_score(self) -> bool:
@@ -303,6 +315,20 @@ class TrainArgs(CommonArgs):
     @train_data_size.setter
     def train_data_size(self, train_data_size: int) -> None:
         self._train_data_size = train_data_size
+
+    @property
+    def use_taxon(self) -> bool:
+        """Whether to use the taxonomy as part of the model by providing a taxonomy embedding."""
+        return self.taxon_column is not None
+
+    @property
+    def num_taxons(self) -> int:
+        """The number of unique taxon indices."""
+        return self._num_taxons
+
+    @num_taxons.setter
+    def num_taxons(self, num_taxons: int) -> None:
+        self._num_taxons = num_taxons
 
     def process_args(self) -> None:
         super(TrainArgs, self).process_args()

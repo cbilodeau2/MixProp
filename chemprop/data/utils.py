@@ -6,6 +6,7 @@ from random import Random
 from typing import List, Set, Tuple, Union
 import os
 
+from ete3 import NCBITaxa
 from rdkit import Chem
 import numpy as np
 from tqdm import tqdm
@@ -136,6 +137,7 @@ def get_data(path: str,
 
     if args is not None:
         # Prefer explicit function arguments but default to args if not provided
+        # TODO: add taxon_column and NCBI here
         smiles_column = smiles_column if smiles_column is not None else args.smiles_column
         target_columns = target_columns if target_columns is not None else args.target_columns
         ignore_columns = ignore_columns if ignore_columns is not None else args.ignore_columns
@@ -156,6 +158,10 @@ def get_data(path: str,
 
     skip_smiles = set()
 
+    # Load NCBI
+    if args.use_taxon:
+        ncbi = NCBITaxa(args.ncbi_dbfile, args.ncbi_taxdump_file)
+
     # Load data
     with open(path) as f:
         reader = csv.DictReader(f)
@@ -170,7 +176,7 @@ def get_data(path: str,
             ignore_columns = set([smiles_column] + ([] if ignore_columns is None else ignore_columns))
             target_columns = [column for column in columns if column not in ignore_columns]
 
-        all_smiles, all_targets, all_rows = [], [], []
+        all_smiles, all_targets, all_rows, all_lineages = [], [], [], []
         for row in tqdm(reader):
             smiles = row[smiles_column]
 
@@ -182,6 +188,9 @@ def get_data(path: str,
             all_smiles.append(smiles)
             all_targets.append(targets)
 
+            if args.use_taxon:
+                all_lineages.append(ncbi.get_lineage(row[args.taxon_column]))
+
             if store_row:
                 all_rows.append(row)
 
@@ -192,12 +201,26 @@ def get_data(path: str,
             MoleculeDatapoint(
                 smiles=smiles,
                 targets=targets,
+                raw_lineage=all_lineages[i] if args.use_taxon else None,
                 row=all_rows[i] if store_row else None,
                 features_generator=features_generator,
                 features=features_data[i] if features_data is not None else None
             ) for i, (smiles, targets) in tqdm(enumerate(zip(all_smiles, all_targets)),
                                                total=len(all_smiles))
         ])
+
+    if args.use_taxon:
+        # Map taxonomy IDs to indices
+        taxons = {taxon for lineage in all_lineages for taxon in lineage}
+        taxon_to_index = {}
+        for taxon in sorted(taxons):
+            taxon_to_index[taxon] = len(taxon_to_index) + 1  # Keep 0 as padding index
+
+        # Use taxon to index map to update lineages
+        data.set_lineages(taxon_to_index)
+
+        # Keep track of taxon_to_index in args
+        args.num_taxons = len(taxon_to_index)
 
     # Filter out invalid SMILES
     if skip_invalid_smiles:
