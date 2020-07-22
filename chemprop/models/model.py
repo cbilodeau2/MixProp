@@ -140,8 +140,6 @@ class MoleculeModel(nn.Module):
 
             return taxon_embedding
 
-        import ipdb; ipdb.set_trace()
-
         # Determine lengths
         lengths = torch.FloatTensor([len(lineage) for lineage in lineage_batch]).to(self.device)
 
