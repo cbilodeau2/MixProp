@@ -115,6 +115,17 @@ class MoleculeModel(nn.Module):
             padding_idx=0
         )
 
+        if args.lineage_embedding_type == 'rnn_lineage':
+            self.taxon_rnn = nn.LSTM(
+                input_size=self.taxon_embedder.embedding_dim,
+                hidden_size=args.hidden_size,
+                num_layers=1,
+                bias=True,
+                batch_first=True,
+                dropout=args.dropout,
+                bidirectional=True
+            )
+
     def embed_lineage(self, lineage_batch: List[List[int]]) -> torch.FloatTensor:
         """
         Embeds a batch of lineages.
@@ -130,7 +141,8 @@ class MoleculeModel(nn.Module):
             return taxon_embedding
 
         # Pad lineages with padding
-        max_length = max(len(lineage) for lineage in lineage_batch)
+        lengths = [len(lineage) for lineage in lineage_batch]
+        max_length = max(lengths)
 
         for i, lineage in enumerate(lineage_batch):
             lineage_batch[i] = [0] * (max_length - len(lineage)) + lineage
@@ -140,12 +152,21 @@ class MoleculeModel(nn.Module):
         lineage_embeddings = self.taxon_embedder(lineage_batch)
 
         # Embed lineage
-        if self.lineage_embedding_type == 'average_lineage':
-            average_lineage_embedding = torch.mean(lineage_embeddings, dim=1)
+        if self.lineage_embedding_type in ['average_lineage', 'sum_lineage']:
+            sum_lineage_embedding = torch.sum(lineage_embeddings, dim=1)
+
+            if self.lineage_embedding_type == 'sum_lineage':
+                return sum_lineage_embedding
+
+            lengths = torch.FloatTensor(lengths).unsqueeze(dim=1)
+            average_lineage_embedding = sum_lineage_embedding / lengths
 
             return average_lineage_embedding
         elif self.lineage_embedding_type == 'rnn_lineage':
-            raise NotImplementedError
+            _, (hidden, _) = self.taxon_rnn(lineage_embeddings)
+            hidden = hidden.sum(dim=0)
+
+            return hidden
         else:
             raise ValueError(f'Lineage embedding type "{self.lineage_embedding_type}" not supported.')
 
