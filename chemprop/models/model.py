@@ -162,6 +162,10 @@ class MoleculeModel(nn.Module):
             average_lineage_embedding = sum_lineage_embedding / lengths.unsqueeze(dim=1)
 
             return average_lineage_embedding
+        elif self.lineage_embedding_type == 'max_lineage':
+            max_lineage_embedding, _ = torch.max(lineage_embeddings, dim=1)
+
+            return max_lineage_embedding
         elif self.lineage_embedding_type == 'rnn_lineage':
             # Pack lineage embeddings
             lineage_embeddings = torch.nn.utils.rnn.pack_padded_sequence(
@@ -173,9 +177,9 @@ class MoleculeModel(nn.Module):
 
             # Run RNN
             _, (hidden, _) = self.taxon_rnn(lineage_embeddings)
-            hidden = hidden.sum(dim=0)
+            rnn_lineage_embedding = hidden.sum(dim=0)
 
-            return hidden
+            return rnn_lineage_embedding
         else:
             raise ValueError(f'Lineage embedding type "{self.lineage_embedding_type}" not supported.')
 
