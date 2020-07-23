@@ -232,7 +232,7 @@ class TrainArgs(CommonArgs):
     """
     ensemble_size: int = 1
     """Number of models in ensemble."""
-    lineage_embedding_type: Literal['taxon_only', 'average_lineage', 'sum_lineage', 'rnn_lineage'] = 'taxon_only'
+    lineage_embedding_type: Literal['taxon_only', 'average_lineage', 'sum_lineage', 'rnn_lineage'] = 'average_lineage'
     """The type of taxonomy lineage embedding to use. Only applied if :code:`taxon_column` is not None."""
 
     # Training arguments
