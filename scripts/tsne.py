@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
-from chemprop.data.utils import get_smiles
+from chemprop.data import get_smiles
 from chemprop.features import get_features_generator
 from chemprop.utils import makedirs
 
@@ -38,7 +38,7 @@ def compare_datasets_tsne(args: Args):
     # Random seed for random subsampling
     np.random.seed(0)
 
-    # Genenrate labels based on file name
+    # Generate labels based on file name
     labels = [os.path.basename(path).replace('.csv', '') for path in args.smiles_paths]
 
     # Load the smiles datasets

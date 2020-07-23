@@ -1,0 +1,161 @@
+{% extends "layout.html" %}
+{% from 'macros.html' import add_checkpoint, chemdraw, error_message, warning_message %}
+
+{% block title %}
+    <h1>Predict</h1>
+{% endblock %}
+
+{% block content %}
+    {% if not config['DEMO'] %}
+    {{ add_checkpoint('predict', checkpoint_upload_warnings, checkpoint_upload_errors) }}
+    <hr>
+
+    <h3>Predict</h3>
+    {% endif %}
+
+    <h4>Antibiotics</h4>
+    <p>A model trained to predict the probability that a molecule will inhibit the growth of E. coli. This model was trained on the data from <a href="https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1">A Deep Learning Approach to Antibiotic Discovery</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/ecoli.csv">here</a>). The model is an ensemble of 20 chemprop models augmented with RDKit features and with optimized hyperparamers.</p>
+
+    <h4>SARS</h4>
+    <p> A model trained to predict the probability that a molecule will inhibit the 3CL protease of SARS-CoV. This model was trained on the data from PubChem assay <a href="https://pubchem.ncbi.nlm.nih.gov/bioassay/1706">AID1706</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/AID1706_binarized_sars.csv">here</a>). The model is an ensemble of 5 chemprop models augmented with RDKit features.</p>
+    
+    <h4>SARS - Balanced</h4>
+    <p>The same as SARS but trained using a class balance approach where each training batch samples an equal number of positive and negative molecules. Due to the extreme class imbalance of AID1706 (0.1% positive, 99.9% negative), this class balance approach encourages the model to produce predictions in a more reasonable range rather than predicting extremely low probabilities for almost all molecules (due to the weight of the negatives).</p>
+
+    <h4>AMU SARS-CoV-2 <i>in vitro</i></h4>
+    <p>A model trained to predict the probability that a molecule will inhibit SARS-CoV-2 replication <i>in vitro</i>. This model was trained on data from <a href="https://www.biorxiv.org/content/10.1101/2020.04.03.023846v1"><i>In vitro</i> screening of a FDA approved chemical library reveals potential inhibitors of SARS-CoV-2 replication</a> (processed data is <a href="https://github.com/yangkevin2/coronavirus_data/blob/master/data/amu_sars_cov_2_in_vitro.csv">here</a>). The model is an ensemble of 5 chemprop models augmented with RDKit features and with optimized hyperparameters.</p>
+
+    <form enctype="multipart/form-data" method="POST">         <!--Model checkpoint selector-->         <h5>Model checkpoint</h5>         <select name="checkpointName" required>             {% for checkpoint in checkpoints %}                 <option value="{{ checkpoint[0] }}">{{ checkpoint[1] }}</option>             {% endfor%}
+
+
+        </select>
+
+        <br>
+        <br>
+
+        <!--SMILES upload type selector-->
+        <div class="btn-group" id="inputSelect" data-toggle="buttons">
+            <label id="textButton" class="btn btn-primary active">
+              <input type="radio" name="inputType" value="text" autocomplete="off"> Text Input
+            </label>
+            <label id="fileButton" class="btn btn-primary">
+              <input type="radio" name="inputType" value="file" autocomplete="off"> Upload File
+            </label>
+            <label id="drawButton" class="btn btn-primary">
+              <input type="radio" name="inputType" value="file" autocomplete="off"> Draw Molecule
+            </label>
+        </div>
+
+        <br>
+
+        <!--SMILES input-->
+        <div id="textInputForm">
+            <h5>SMILES (one per line)</h5>
+            <textarea id="textSmilesInput" name="textSmiles" cols="100" rows="10" placeholder="SMILES" required></textarea>
+        </div>
+        <div id="fileInputForm" style="display:none">
+            <h5>File containing SMILES (one per line)</h5>
+            <input id="fileSmilesInput" type="file" name="data" accept=".csv">
+        </div>
+        <div id="drawInputForm" style="display:none">
+            <h5>Draw a molecule</h5>
+            {{ chemdraw() }}
+            <br>
+            <button type="button" id="convertToSmiles" class="btn btn-primary btn-xs">Convert to SMILES</button>
+            <input id="drawSmilesInput" name="drawSmiles" placeholder="SMILES">
+        </div>
+
+        <br>
+
+        <!--SMILES input functionality-->
+        <script>
+            $(document).ready(function() {
+                $(document).ready(function() {
+                    $("#textButton").click(function() {
+                        $("#textInputForm").show();
+                        $("#textSmilesInput").prop('required', true);
+                        $("#fileInputForm").hide();
+                        $("#fileSmilesInput").prop('required', false);
+                        $("#drawInputForm").hide();
+                        $("#drawSmilesInput").prop('required', false);
+                        $("#drawSmilesInput").val('');
+                    });
+                    $("#fileButton").click(function() {
+                        $("#textInputForm").hide();
+                        $("#textSmilesInput").prop('required', false);
+                        $("#textSmilesInput").val('');
+                        $("#fileInputForm").show();
+                        $("#fileSmilesInput").prop('required', true);
+                        $("#drawInputForm").hide();
+                        $("#drawSmilesInput").prop('required', false);
+                        $("#drawSmilesInput").val('');
+                    });
+                    $("#drawButton").click(function() {
+                        $("#textInputForm").hide();
+                        $("#textSmilesInput").prop('required', false);
+                        $("#textSmilesInput").val('');
+                        $("#fileInputForm").hide();
+                        $("#fileSmilesInput").prop('required', false);
+                        $("#drawInputForm").show();
+                        $("#drawSmilesInput").prop('required', true);
+                    });
+                });
+
+                $("#convertToSmiles").click(function() {
+                    $("#drawSmilesInput").val(jsmeApplet.smiles());
+                });
+            });
+        </script>
+
+        <!--GPU selector-->
+        {% if cuda %}
+            <h5>GPU</h5>
+            <select name="gpu">
+                <option value="None">None</option>
+                {% for gpu in gpus %}
+                    <option value="{{ gpu }}">{{ gpu }}</option>
+                {% endfor %}
+            </select>
+            <br>
+            <br>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary btn-md">Predict</button>
+    </form>
+
+    <br>
+
+    {% if warnings %}
+        {% for warning in warnings %}
+            {{ warning_message(warning) }}
+        {% endfor %}
+    {% endif %}
+
+    {% if errors %}
+        {% for error in errors %}
+            {{ error_message(error) }}
+        {% endfor %}
+    {% endif %}
+
+    {% if predicted %}
+        <hr>
+
+        <a href="{{ url_for('download_predictions') }}"><button class="btn btn-default btn-md">Download Predictions</button></a>
+
+        <br>
+        <br>
+
+        {% for i in range(num_smiles) %}
+            <p>SMILES: {{ smiles[i] }}</p>
+
+            {% for j in range(num_tasks) %}
+                <p>{{ task_names[j] }}: {{ preds[i][j] }}</p>
+            {% endfor %}
+
+            <hr>
+        {% endfor %}
+        {% if show_more > 0 %}
+            <p>... and {{ show_more }} more. Download file for full predictions.</p>
+        {% endif %}
+    {% endif %}
+{% endblock %}

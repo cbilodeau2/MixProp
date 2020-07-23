@@ -16,20 +16,36 @@ from chemprop.args import PredictArgs, TrainArgs
 from chemprop.features import load_features
 
 
-def get_task_names(path: str, smiles_column: str = None) -> List[str]:
+def get_task_names(path: str,
+                   smiles_column: str = None,
+                   target_columns: List[str] = None,
+                   ignore_columns: List[str] = None) -> List[str]:
     """
-    Gets the task names from a data CSV file (i.e. all column names except for the SMILES column).
+    Gets the task names from a data CSV file.
+
+    If :code:`target_columns` is provided, returns `target_columns`.
+    Otherwise, returns all columns except the :code:`smiles_column`
+    (or the first column, if the :code:`smiles_column` is None) and
+    the :code:`ignore_columns`.
 
     :param path: Path to a CSV file.
-    :param smiles_column: The name of the column containing SMILES strings. By default, uses the first column.
+    :param smiles_column: The name of the column containing SMILES. By default, uses the first column.
+    :param target_columns: Name of the columns containing target values. By default, uses all columns
+                           except the :code:`smiles_column` and the :code:`ignore_columns`.
+    :param ignore_columns: Name of the columns to ignore when :code:`target_columns` is not provided.
     :return: A list of task names.
     """
+    if target_columns is not None:
+        return target_columns
+
     columns = get_header(path)
 
     if smiles_column is None:
         smiles_column = columns[0]
 
-    target_names = [name for name in columns if name != smiles_column]
+    ignore_columns = set([smiles_column] + ([] if ignore_columns is None else ignore_columns))
+
+    target_names = [column for column in columns if column not in ignore_columns]
 
     return target_names
 
@@ -47,24 +63,14 @@ def get_header(path: str) -> List[str]:
     return header
 
 
-def get_num_tasks(path: str) -> int:
-    """
-    Gets the number of tasks in a data CSV file.
-
-    :param path: Path to a CSV file.
-    :return: The number of tasks.
-    """
-    return len(get_header(path)) - 1
-
-
 def get_smiles(path: str, smiles_column: str = None, header: bool = True) -> List[str]:
     """
-    Returns the smiles strings from a data CSV file (assuming the first line is a header).
+    Returns the SMILES from a data CSV file.
 
     :param path: Path to a CSV file.
-    :param smiles_column: The name of the column containing SMILES strings. By default, uses the first column.
-    :param header: Whether the CSV file contains a header (that will be skipped).
-    :return: A list of smiles strings.
+    :param smiles_column: The name of the column containing SMILES. By default, uses the first column.
+    :param header: Whether the CSV file contains a header.
+    :return: A list of SMILES.
     """
     if smiles_column is not None and not header:
         raise ValueError('If smiles_column is provided, the CSV file must have a header.')
@@ -87,8 +93,8 @@ def filter_invalid_smiles(data: MoleculeDataset) -> MoleculeDataset:
     """
     Filters out invalid SMILES.
 
-    :param data: A MoleculeDataset.
-    :return: A MoleculeDataset with only valid molecules.
+    :param data: A :class:`~chemprop.data.MoleculeDataset`.
+    :return: A :class:`~chemprop.data.MoleculeDataset` with only the valid molecules.
     """
     return MoleculeDataset([datapoint for datapoint in tqdm(data)
                             if datapoint.smiles != '' and datapoint.mol is not None
@@ -98,28 +104,33 @@ def filter_invalid_smiles(data: MoleculeDataset) -> MoleculeDataset:
 def get_data(path: str,
              smiles_column: str = None,
              target_columns: List[str] = None,
+             ignore_columns: List[str] = None,
              skip_invalid_smiles: bool = True,
-             args: Union[PredictArgs, TrainArgs] = None,
+             args: Union[TrainArgs, PredictArgs] = None,
              features_path: List[str] = None,
              features_generator: List[str] = None,
              max_data_size: int = None,
+             store_row: bool = False,
              logger: Logger = None) -> MoleculeDataset:
     """
-    Gets smiles string and target values (and optionally compound names if provided) from a CSV file.
+    Gets SMILES and target values from a CSV file.
 
     :param path: Path to a CSV file.
-    :param smiles_column: The name of the column containing SMILES strings. By default, uses the first column.
-    :param target_columns: Name of the columns containing target values. By default, uses all columns except the SMILES column.
-    :param skip_invalid_smiles: Whether to skip and filter out invalid smiles.
-    :param args: Arguments.
+    :param smiles_column: The name of the column containing SMILES. By default, uses the first column.
+    :param target_columns: Name of the columns containing target values. By default, uses all columns
+                           except the :code:`smiles_column` and the :code:`ignore_columns`.
+    :param ignore_columns: Name of the columns to ignore when :code:`target_columns` is not provided.
+    :param skip_invalid_smiles: Whether to skip and filter out invalid smiles using :func:`filter_invalid_smiles`.
+    :param args: Arguments, either :class:`~chemprop.args.TrainArgs` or :class:`~chemprop.args.PredictArgs`.
     :param features_path: A list of paths to files containing features. If provided, it is used
-    in place of args.features_path.
+                          in place of :code:`args.features_path`.
     :param features_generator: A list of features generators to use. If provided, it is used
-    in place of args.features_generator.
+                               in place of :code:`args.features_generator`.
     :param max_data_size: The maximum number of data points to load.
-    :param logger: Logger.
-    :return: A MoleculeDataset containing smiles strings and target values along
-    with other info such as additional features and compound names when desired.
+    :param logger: A logger for recording output.
+    :param store_row: Whether to store the raw CSV row in each :class:`~chemprop.data.data.MoleculeDatapoint`.
+    :return: A :class:`~chemprop.data.MoleculeDataset` containing SMILES and target values along
+             with other info such as additional features when desired.
     """
     debug = logger.debug if logger is not None else print
 
@@ -127,6 +138,7 @@ def get_data(path: str,
         # Prefer explicit function arguments but default to args if not provided
         smiles_column = smiles_column if smiles_column is not None else args.smiles_column
         target_columns = target_columns if target_columns is not None else args.target_columns
+        ignore_columns = ignore_columns if ignore_columns is not None else args.ignore_columns
         features_path = features_path if features_path is not None else args.features_path
         features_generator = features_generator if features_generator is not None else args.features_generator
         max_data_size = max_data_size if max_data_size is not None else args.max_data_size
@@ -155,7 +167,8 @@ def get_data(path: str,
 
         # By default, the targets columns are all the columns except the SMILES column
         if target_columns is None:
-            target_columns = [column for column in columns if column != smiles_column]
+            ignore_columns = set([smiles_column] + ([] if ignore_columns is None else ignore_columns))
+            target_columns = [column for column in columns if column not in ignore_columns]
 
         all_smiles, all_targets, all_rows = [], [], []
         for row in tqdm(reader):
@@ -168,7 +181,9 @@ def get_data(path: str,
 
             all_smiles.append(smiles)
             all_targets.append(targets)
-            all_rows.append(row)
+
+            if store_row:
+                all_rows.append(row)
 
             if len(all_smiles) >= max_data_size:
                 break
@@ -177,11 +192,11 @@ def get_data(path: str,
             MoleculeDatapoint(
                 smiles=smiles,
                 targets=targets,
-                row=row,
+                row=all_rows[i] if store_row else None,
                 features_generator=features_generator,
                 features=features_data[i] if features_data is not None else None
-            ) for i, (smiles, targets, row) in tqdm(enumerate(zip(all_smiles, all_targets, all_rows)),
-                                                    total=len(all_smiles))
+            ) for i, (smiles, targets) in tqdm(enumerate(zip(all_smiles, all_targets)),
+                                               total=len(all_smiles))
         ])
 
     # Filter out invalid SMILES
@@ -200,13 +215,13 @@ def get_data_from_smiles(smiles: List[str],
                          logger: Logger = None,
                          features_generator: List[str] = None) -> MoleculeDataset:
     """
-    Converts SMILES to a MoleculeDataset.
+    Converts a list of SMILES to a :class:`~chemprop.data.MoleculeDataset`.
 
-    :param smiles: A list of SMILES strings.
-    :param skip_invalid_smiles: Whether to skip and filter out invalid smiles.
-    :param logger: Logger.
+    :param smiles: A list of SMILES.
+    :param skip_invalid_smiles: Whether to skip and filter out invalid smiles using :func:`filter_invalid_smiles`
+    :param logger: A logger for recording output.
     :param features_generator: List of features generators.
-    :return: A MoleculeDataset with all of the provided SMILES.
+    :return: A :class:`~chemprop.data.MoleculeDataset` with all of the provided SMILES.
     """
     debug = logger.debug if logger is not None else print
 
@@ -237,17 +252,17 @@ def split_data(data: MoleculeDataset,
                logger: Logger = None) -> Tuple[MoleculeDataset,
                                                MoleculeDataset,
                                                MoleculeDataset]:
-    """
+    r"""
     Splits data into training, validation, and test splits.
 
-    :param data: A MoleculeDataset.
+    :param data: A :class:`~chemprop.data.MoleculeDataset`.
     :param split_type: Split type.
-    :param sizes: A length-3 tuple with the proportions of data in the
-    train, validation, and test sets.
+    :param sizes: A length-3 tuple with the proportions of data in the train, validation, and test sets.
     :param seed: The random seed to use before shuffling data.
-    :param args: Arguments.
-    :param logger: A logger.
-    :return: A tuple containing the train, validation, and test splits of the data.
+    :param args: A :class:`~chemprop.args.TrainArgs` object.
+    :param logger: A logger for recording output.
+    :return: A tuple of :class:`~chemprop.data.MoleculeDataset`\ s containing the train,
+             validation, and test splits of the data.
     """
     if not (len(sizes) == 3 and sum(sizes) == 1):
         raise ValueError('Valid split sizes must sum to 1 and must have three sizes: train, validation, and test.')
@@ -343,11 +358,10 @@ def split_data(data: MoleculeDataset,
 
 def get_class_sizes(data: MoleculeDataset) -> List[List[float]]:
     """
-    Determines the proportions of the different classes in the classification dataset.
+    Determines the proportions of the different classes in a classification dataset.
 
-    :param data: A classification dataset
-    :return: A list of lists of class proportions. Each inner list contains the class proportions
-    for a task.
+    :param data: A classification :class:`~chemprop.data.MoleculeDataset`.
+    :return: A list of lists of class proportions. Each inner list contains the class proportions for a task.
     """
     targets = data.targets()
 
@@ -371,6 +385,25 @@ def get_class_sizes(data: MoleculeDataset) -> List[List[float]]:
         class_sizes.append([1 - ones, ones])
 
     return class_sizes
+
+
+#  TODO: Validate multiclass dataset type.
+def validate_dataset_type(data: MoleculeDataset, dataset_type: str) -> None:
+    """
+    Validates the dataset type to ensure the data matches the provided type.
+
+    :param data: A :class:`~chemprop.data.MoleculeDataset`.
+    :param dataset_type: The dataset type to check.
+    """
+    target_set = {target for targets in data.targets() for target in targets} - {None}
+    classification_target_set = {0, 1}
+
+    if dataset_type == 'classification' and not (target_set <= classification_target_set):
+        raise ValueError('Classification data targets must only be 0 or 1 (or None). '
+                         'Please switch to regression.')
+    elif dataset_type == 'regression' and target_set <= classification_target_set:
+        raise ValueError('Regression data targets must be more than just 0 or 1 (or None). '
+                         'Please switch to classification.')
 
 
 def validate_data(data_path: str) -> Set[str]:

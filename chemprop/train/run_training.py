@@ -1,4 +1,3 @@
-import csv
 from logging import Logger
 import os
 import sys
@@ -8,15 +7,13 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch
 from tqdm import trange
-import pickle
 from torch.optim.lr_scheduler import ExponentialLR
 
 from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
 from .train import train
 from chemprop.args import TrainArgs
-from chemprop.data import StandardScaler, MoleculeDataLoader
-from chemprop.data.utils import get_class_sizes, get_data, get_task_names, split_data
+from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, split_data, StandardScaler, validate_dataset_type
 from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, get_metric_func, load_checkpoint,\
@@ -25,11 +22,12 @@ from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, g
 
 def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     """
-    Trains a model and returns test scores on the model checkpoint with the highest validation score.
+    Loads data, trains a Chemprop model, and returns test scores for the model checkpoint with the highest validation score.
 
-    :param args: Arguments.
-    :param logger: Logger.
-    :return: A list of ensemble scores for each task.
+    :param args: A :class:`~chemprop.args.TrainArgs` object containing arguments for
+                 loading data and training the Chemprop model.
+    :param logger: A logger to record output.
+    :return: A list of model scores for each task.
     """
     if logger is not None:
         debug, info = logger.debug, logger.info
@@ -52,9 +50,8 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
 
     # Get data
     debug('Loading data')
-    args.task_names = args.target_columns or get_task_names(args.data_path)
     data = get_data(path=args.data_path, args=args, logger=logger)
-    args.num_tasks = data.num_tasks()
+    validate_dataset_type(data, dataset_type=args.dataset_type)
     args.features_size = data.features_size()
     debug(f'Number of tasks = {args.num_tasks}')
 
@@ -87,7 +84,8 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
             val_data=val_data,
             test_data=test_data,
             data_path=args.data_path,
-            save_dir=args.save_dir
+            save_dir=args.save_dir,
+            smiles_column=args.smiles_column
         )
 
     if args.features_scaling:
@@ -153,6 +151,9 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
         num_workers=num_workers,
         cache=cache
     )
+
+    if args.class_balance:
+        debug(f'With class_balance, effective train size = {train_data_loader.iter_size:,}')
 
     # Train ensemble of models
     for model_idx in range(args.ensemble_size):
@@ -236,7 +237,7 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
         model = load_checkpoint(os.path.join(save_dir, 'model.pt'), device=args.device, logger=logger)
-        
+
         test_preds = predict(
             model=model,
             data_loader=test_data_loader,

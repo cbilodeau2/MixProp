@@ -11,15 +11,13 @@ from chemprop.nn_utils import index_select_ND, get_activation_function
 
 
 class MPNEncoder(nn.Module):
-    """A message passing neural network for encoding a molecule."""
+    """An :class:`MPNEncoder` is a message passing neural network for encoding a molecule."""
 
     def __init__(self, args: TrainArgs, atom_fdim: int, bond_fdim: int):
-        """Initializes the MPNEncoder.
-
-        :param args: Arguments.
-        :param atom_fdim: Atom features dimension.
-        :param bond_fdim: Bond features dimension.
-        :param atom_messages: Whether to use atoms to pass messages instead of bonds.
+        """
+        :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
+        :param atom_fdim: Atom feature vector dimension.
+        :param bond_fdim: Bond feature vector dimension.
         """
         super(MPNEncoder, self).__init__()
         self.atom_fdim = atom_fdim
@@ -34,7 +32,6 @@ class MPNEncoder(nn.Module):
         self.features_only = args.features_only
         self.use_input_features = args.use_input_features
         self.device = args.device
-        self.args = args
 
         if self.features_only:
             return
@@ -68,9 +65,10 @@ class MPNEncoder(nn.Module):
         """
         Encodes a batch of molecular graphs.
 
-        :param mol_graph: A BatchMolGraph representing a batch of molecular graphs.
-        :param features_batch: A list of ndarrays containing additional features.
-        :return: A PyTorch tensor of shape (num_molecules, hidden_size) containing the encoding of each molecule.
+        :param mol_graph: A :class:`~chemprop.features.featurization.BatchMolGraph` representing
+                          a batch of molecular graphs.
+        :param features_batch: A list of numpy arrays containing additional features.
+        :return: A PyTorch tensor of shape :code:`(num_molecules, hidden_size)` containing the encoding of each molecule.
         """
         if self.use_input_features:
             features_batch = torch.from_numpy(np.stack(features_batch)).float().to(self.device)
@@ -144,34 +142,32 @@ class MPNEncoder(nn.Module):
 
 
 class MPN(nn.Module):
-    """A message passing neural network for encoding a molecule."""
+    """An :class:`MPN` is a wrapper around :class:`MPNEncoder` which featurizes input as needed."""
 
     def __init__(self,
                  args: TrainArgs,
                  atom_fdim: int = None,
                  bond_fdim: int = None):
         """
-        Initializes the MPN.
-
-        :param args: Arguments.
-        :param atom_fdim: Atom features dimension.
-        :param bond_fdim: Bond features dimension.
+        :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
+        :param atom_fdim: Atom feature vector dimension.
+        :param bond_fdim: Bond feature vector dimension.
         """
         super(MPN, self).__init__()
-        self.args = args
         self.atom_fdim = atom_fdim or get_atom_fdim()
         self.bond_fdim = bond_fdim or get_bond_fdim(atom_messages=args.atom_messages)
-        self.encoder = MPNEncoder(self.args, self.atom_fdim, self.bond_fdim)
+        self.encoder = MPNEncoder(args, self.atom_fdim, self.bond_fdim)
 
     def forward(self,
                 batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
                 features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
         """
-        Encodes a batch of molecular SMILES strings.
+        Encodes a batch of molecules.
 
-        :param batch: A list of SMILES strings, a list of RDKit molecules, or a BatchMolGraph.
-        :param features_batch: A list of ndarrays containing additional features.
-        :return: A PyTorch tensor of shape (num_molecules, hidden_size) containing the encoding of each molecule.
+        :param batch: A list of SMILES, a list of RDKit molecules, or a
+                      :class:`~chemprop.features.featurization.BatchMolGraph`.
+        :param features_batch: A list of numpy arrays containing additional features.
+        :return: A PyTorch tensor of shape :code:`(num_molecules, hidden_size)` containing the encoding of each molecule.
         """
         if type(batch) != BatchMolGraph:
             batch = mol2graph(batch)

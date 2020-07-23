@@ -2,7 +2,7 @@ from logging import Logger
 import os
 import pickle
 from pprint import pformat
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Union
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -10,17 +10,28 @@ from sklearn.svm import SVC, SVR
 from tqdm import trange, tqdm
 
 from chemprop.args import SklearnTrainArgs
-from chemprop.data import MoleculeDataset
-from chemprop.data.utils import get_data, split_data
+from chemprop.data import get_data, get_task_names, MoleculeDataset, split_data
 from chemprop.features import get_features_generator
-from chemprop.train.evaluate import evaluate_predictions
-from chemprop.utils import get_metric_func, makedirs
+from chemprop.train import evaluate_predictions
+from chemprop.utils import create_logger, get_metric_func, makedirs, timeit
 
 
-def predict(model,
+SKLEARN_TRAIN_LOGGER_NAME = 'sklearn_train'
+
+
+def predict(model: Union[RandomForestRegressor, RandomForestClassifier, SVR, SVC],
             model_type: str,
             dataset_type: str,
             features: List[np.ndarray]) -> List[List[float]]:
+    """
+    Predicts using a scikit-learn model.
+
+    :param model: The trained scikit-learn model to make predictions with.
+    :param model_type: The type of model.
+    :param dataset_type: The type of dataset.
+    :param features: The data features used as input for the model.
+    :return: A list of lists of floats containing the predicted values.
+    """
     if dataset_type == 'regression':
         preds = model.predict(features)
 
@@ -48,12 +59,26 @@ def predict(model,
     return preds
 
 
-def single_task_sklearn(model,
+def single_task_sklearn(model: Union[RandomForestRegressor, RandomForestClassifier, SVR, SVC],
                         train_data: MoleculeDataset,
                         test_data: MoleculeDataset,
                         metric_func: Callable,
                         args: SklearnTrainArgs,
                         logger: Logger = None) -> List[float]:
+    """
+    Trains a single-task scikit-learn model, meaning a separate model is trained for each task.
+
+    This is necessary if some tasks have None (unknown) values.
+
+    :param model: The scikit-learn model to train.
+    :param train_data: The training data.
+    :param test_data: The test data.
+    :param metric_func: Metric function which takes in a list of targets and a list of predictions.
+    :param args: A :class:`~chemprop.args.SklearnTrainArgs` object containing arguments for
+                 training the scikit-learn model.
+    :param logger: A logger to record output.
+    :return: A list of scores on the tasks.
+    """
     scores = []
     num_tasks = train_data.num_tasks()
     for task_num in trange(num_tasks):
@@ -88,12 +113,26 @@ def single_task_sklearn(model,
     return scores
 
 
-def multi_task_sklearn(model,
+def multi_task_sklearn(model: Union[RandomForestRegressor, RandomForestClassifier, SVR, SVC],
                        train_data: MoleculeDataset,
                        test_data: MoleculeDataset,
                        metric_func: Callable,
                        args: SklearnTrainArgs,
                        logger: Logger = None) -> List[float]:
+    """
+    Trains a multi-task scikit-learn model, meaning one model is trained simultaneously on all tasks.
+
+    This is only possible if none of the tasks have None (unknown) values.
+
+    :param model: The scikit-learn model to train.
+    :param train_data: The training data.
+    :param test_data: The test data.
+    :param metric_func: Metric function which takes in a list of targets and a list of predictions.
+    :param args: A :class:`~chemprop.args.SklearnTrainArgs` object containing arguments for
+                 training the scikit-learn model.
+    :param logger: A logger to record output.
+    :return: A list of scores on the tasks.
+    """
     num_tasks = train_data.num_tasks()
 
     train_targets = train_data.targets()
@@ -127,6 +166,14 @@ def multi_task_sklearn(model,
 
 
 def run_sklearn(args: SklearnTrainArgs, logger: Logger = None) -> List[float]:
+    """
+    Loads data, trains a scikit-learn model, and returns test scores for the model checkpoint with the highest validation score.
+
+    :param args: A :class:`~chemprop.args.SklearnTrainArgs` object containing arguments for
+                 loading data and training the scikit-learn model.
+    :param logger: A logger to record output.
+    :return: A list of model scores for each task.
+    """
     if logger is not None:
         debug, info = logger.debug, logger.info
     else:
@@ -138,6 +185,12 @@ def run_sklearn(args: SklearnTrainArgs, logger: Logger = None) -> List[float]:
 
     debug('Loading data')
     data = get_data(path=args.data_path, smiles_column=args.smiles_column, target_columns=args.target_columns)
+    args.task_names = get_task_names(
+        path=args.data_path,
+        smiles_column=args.smiles_column,
+        target_columns=args.target_columns,
+        ignore_columns=args.ignore_columns
+    )
 
     if args.model_type == 'svm' and data.num_tasks() != 1:
         raise ValueError(f'SVM can only handle single-task data but found {data.num_tasks()} tasks')
@@ -180,6 +233,8 @@ def run_sklearn(args: SklearnTrainArgs, logger: Logger = None) -> List[float]:
 
     debug(model)
 
+    model.train_args = args.as_dict()
+
     debug('Training')
     if args.single_task:
         scores = single_task_sklearn(
@@ -206,6 +261,17 @@ def run_sklearn(args: SklearnTrainArgs, logger: Logger = None) -> List[float]:
 
 
 def cross_validate_sklearn(args: SklearnTrainArgs, logger: Logger = None) -> Tuple[float, float]:
+    """
+    Runs k-fold cross-validation for a scikit-learn model.
+
+    For each of k splits (folds) of the data, trains and tests a model on that split
+    and aggregates the performance across folds.
+
+    :param args: A :class:`~chemprop.args.SklearnTrainArgs` object containing arguments for
+                 loading data and training the scikit-learn model.
+    :param logger: A logger for recording output.
+    :return: A tuple containing the mean and standard deviation performance across folds.
+    """
     info = logger.info if logger is not None else print
     init_seed = args.seed
     save_dir = args.save_dir
@@ -231,3 +297,14 @@ def cross_validate_sklearn(args: SklearnTrainArgs, logger: Logger = None) -> Tup
     info(f'Overall test {args.metric} = {mean_score:.6f} +/- {std_score:.6f}')
 
     return mean_score, std_score
+
+
+@timeit(logger_name=SKLEARN_TRAIN_LOGGER_NAME)
+def sklearn_train() -> None:
+    """Parses scikit-learn training arguments and trains a scikit-learn model.
+
+    This is the entry point for the command line command :code:`sklearn_train`.
+    """
+    args = SklearnTrainArgs().parse_args()
+    logger = create_logger(name=SKLEARN_TRAIN_LOGGER_NAME, save_dir=args.save_dir, quiet=args.quiet)
+    cross_validate_sklearn(args=args, logger=logger)

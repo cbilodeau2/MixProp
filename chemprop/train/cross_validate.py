@@ -1,3 +1,4 @@
+import csv
 from logging import Logger
 import os
 from typing import Tuple
@@ -6,18 +7,36 @@ import numpy as np
 
 from .run_training import run_training
 from chemprop.args import TrainArgs
-from chemprop.data.utils import get_task_names
-from chemprop.utils import makedirs
+from chemprop.data import get_task_names
+from chemprop.utils import create_logger, makedirs, timeit
+
+
+TRAIN_LOGGER_NAME = 'train'
 
 
 def cross_validate(args: TrainArgs, logger: Logger = None) -> Tuple[float, float]:
-    """k-fold cross validation"""
+    """
+    Runs k-fold cross-validation for a Chemprop model.
+
+    For each of k splits (folds) of the data, trains and tests a model on that split
+    and aggregates the performance across folds.
+
+    :param args: A :class:`~chemprop.args.TrainArgs` object containing arguments for
+                 loading data and training the Chemprop model.
+    :param logger: A logger for recording output.
+    :return: A tuple containing the mean and standard deviation performance across folds.
+    """
     info = logger.info if logger is not None else print
 
     # Initialize relevant variables
     init_seed = args.seed
     save_dir = args.save_dir
-    task_names = args.target_columns or get_task_names(args.data_path)
+    args.task_names = get_task_names(
+        path=args.data_path,
+        smiles_column=args.smiles_column,
+        target_columns=args.target_columns,
+        ignore_columns=args.ignore_columns
+    )
 
     # Run training on different random seeds for each fold
     all_scores = []
@@ -35,11 +54,11 @@ def cross_validate(args: TrainArgs, logger: Logger = None) -> Tuple[float, float
 
     # Report scores for each fold
     for fold_num, scores in enumerate(all_scores):
-        info(f'Seed {init_seed + fold_num} ==> test {args.metric} = {np.nanmean(scores):.6f}')
+        info(f'\tSeed {init_seed + fold_num} ==> test {args.metric} = {np.nanmean(scores):.6f}')
 
         if args.show_individual_scores:
-            for task_name, score in zip(task_names, scores):
-                info(f'Seed {init_seed + fold_num} ==> test {task_name} {args.metric} = {score:.6f}')
+            for task_name, score in zip(args.task_names, scores):
+                info(f'\t\tSeed {init_seed + fold_num} ==> test {task_name} {args.metric} = {score:.6f}')
 
     # Report scores across models
     avg_scores = np.nanmean(all_scores, axis=1)  # average score for each model across tasks
@@ -47,8 +66,30 @@ def cross_validate(args: TrainArgs, logger: Logger = None) -> Tuple[float, float
     info(f'Overall test {args.metric} = {mean_score:.6f} +/- {std_score:.6f}')
 
     if args.show_individual_scores:
-        for task_num, task_name in enumerate(task_names):
-            info(f'Overall test {task_name} {args.metric} = '
+        for task_num, task_name in enumerate(args.task_names):
+            info(f'\tOverall test {task_name} {args.metric} = '
                  f'{np.nanmean(all_scores[:, task_num]):.6f} +/- {np.nanstd(all_scores[:, task_num]):.6f}')
 
+    # Save scores
+    with open(os.path.join(save_dir, 'test_scores.csv'), 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Task', f'Mean {args.metric}', f'Standard deviation {args.metric}'] +
+                        [f'Fold {i} {args.metric}' for i in range(args.num_folds)])
+
+        for task_num, task_name in enumerate(args.task_names):
+            task_scores = all_scores[:, task_num]
+            mean, std = np.nanmean(task_scores), np.nanstd(task_scores)
+            writer.writerow([task_name, mean, std] + task_scores.tolist())
+
     return mean_score, std_score
+
+
+@timeit(logger_name=TRAIN_LOGGER_NAME)
+def chemprop_train() -> None:
+    """Parses Chemprop training arguments and trains (cross-validates) a Chemprop model.
+
+    This is the entry point for the command line command :code:`chemprop_train`.
+    """
+    args = TrainArgs().parse_args()
+    logger = create_logger(name=TRAIN_LOGGER_NAME, save_dir=args.save_dir, quiet=args.quiet)
+    cross_validate(args=args, logger=logger)
