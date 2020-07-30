@@ -4,6 +4,7 @@ import sys
 from typing import List
 
 import numpy as np
+import pandas as pd
 from tensorboardX import SummaryWriter
 import torch
 from tqdm import trange
@@ -13,6 +14,7 @@ from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
 from .train import train
 from chemprop.args import TrainArgs
+from chemprop.constants import MODEL_FILE_NAME
 from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, split_data, StandardScaler, validate_dataset_type
 from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count
@@ -65,11 +67,11 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     if args.separate_val_path and args.separate_test_path:
         train_data = data
     elif args.separate_val_path:
-        train_data, _, test_data = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.0, 0.2), seed=args.seed, args=args, logger=logger)
+        train_data, _, test_data = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.0, 0.2), seed=args.seed, num_folds=args.num_folds, args=args, logger=logger)
     elif args.separate_test_path:
-        train_data, val_data, _ = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.2, 0.0), seed=args.seed, args=args, logger=logger)
+        train_data, val_data, _ = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.2, 0.0), seed=args.seed, num_folds=args.num_folds, args=args, logger=logger)
     else:
-        train_data, val_data, test_data = split_data(data=data, split_type=args.split_type, sizes=args.split_sizes, seed=args.seed, args=args, logger=logger)
+        train_data, val_data, test_data = split_data(data=data, split_type=args.split_type, sizes=args.split_sizes, seed=args.seed, num_folds=args.num_folds, args=args, logger=logger)
 
     if args.dataset_type == 'classification':
         class_sizes = get_class_sizes(data)
@@ -180,7 +182,7 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
         model = model.to(args.device)
 
         # Ensure that model is saved in correct location for evaluation if 0 epochs
-        save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)
+        save_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), model, scaler, features_scaler, args)
 
         # Optimizers
         optimizer = build_optimizer(model, args)
@@ -232,11 +234,11 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
             if args.minimize_score and avg_val_score < best_score or \
                     not args.minimize_score and avg_val_score > best_score:
                 best_score, best_epoch = avg_val_score, epoch
-                save_checkpoint(os.path.join(save_dir, 'model.pt'), model, scaler, features_scaler, args)        
+                save_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), model, scaler, features_scaler, args)
 
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
-        model = load_checkpoint(os.path.join(save_dir, 'model.pt'), device=args.device, logger=logger)
+        model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger)
 
         test_preds = predict(
             model=model,
@@ -287,5 +289,14 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     if args.show_individual_scores:
         for task_name, ensemble_score in zip(args.task_names, ensemble_scores):
             info(f'Ensemble test {task_name} {args.metric} = {ensemble_score:.6f}')
+
+    # Save test preds if doing cross-validation
+    if args.split_type == 'cv':
+        test_preds_dataframe = pd.DataFrame(data={'smiles': test_data.smiles()})
+
+        for i, task_name in enumerate(args.task_names):
+            test_preds_dataframe[task_name] = [pred[i] for pred in avg_test_preds]
+
+        test_preds_dataframe.to_csv(os.path.join(args.save_dir, 'test_preds.csv'), index=False)
 
     return ensemble_scores

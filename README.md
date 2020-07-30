@@ -1,4 +1,9 @@
 # Molecular Property Prediction
+
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/chemprop)](https://badge.fury.io/py/chemprop)
+[![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
+[![Build Status](https://travis-ci.org/chemprop/chemprop.svg?branch=master)](https://travis-ci.org/chemprop/chemprop)
+
 This repository contains message passing neural networks for molecular property prediction as described in the paper [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237) and as used in the paper [A Deep Learning Approach to Antibiotic Discovery](https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1).
 
 **Documentation:** Full documentation of Chemprop is available at https://chemprop.readthedocs.io/en/latest/.
@@ -51,12 +56,11 @@ Then proceed to either option below to complete the installation. Note that on m
 
 ### Option 1: Installing from PyPi
 
-**Coming soon**
-
-1. `conda env create -n chemprop python=3.7`
+1. `conda create -n chemprop python=3.8`
 2. `conda activate chemprop`
 3. `conda install -c conda-forge rdkit`
-4. `pip install chemprop`
+4. `pip install git+https://github.com/bp-kelley/descriptastorus`
+5. `pip install chemprop`
 
 ### Option 2: Installing from source
 
@@ -82,9 +86,9 @@ Note that you will need to run the latter command with nvidia-docker if you are 
 
 For those less familiar with the command line, Chemprop also includes a web interface which allows for basic training and predicting. An example of the website (in demo mode with training disabled) is available here: [chemprop.csail.mit.edu](chemprop.csail.mit.edu).
 
-![Training with our web interface](chemprop/web/app/static/images/web_train.png "Training with our web interface")
+![Training with our web interface](https://github.com/chemprop/chemprop/raw/master/chemprop/web/app/static/images/web_train.png "Training with our web interface")
 
-![Predicting with our web interface](chemprop/web/app/static/images/web_predict.png "Predicting with our web interface")
+![Predicting with our web interface](https://github.com/chemprop/chemprop/raw/master/chemprop/web/app/static/images/web_predict.png "Predicting with our web interface")
 
 You can start the web interface on your local machine in two ways. Flask is used for development mode while gunicorn is used for production mode.
 
