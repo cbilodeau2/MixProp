@@ -49,6 +49,7 @@ setup(
         'flask>=1.1.2',
         'hyperopt>=0.2.3',
         'matplotlib>=3.1.3',
+        'networkx>=2.4',
         'numpy>=1.18.1',
         'pandas>=1.0.3',
         'pandas-flavor>=0.2.0',
