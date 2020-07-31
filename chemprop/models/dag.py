@@ -50,15 +50,15 @@ class RootedDAG(DiGraph):
         # Pre-compute depths of nodes, max depth in graph, and depth_to_node mapping
         self._compute_depths()
         self._max_depth = max(self.depth(node) for node in self.nodes)
-        self._depth_to_node = defaultdict(set)
+        self._depth_to_nodes = defaultdict(set)
         for node in self.nodes:
-            self._depth_to_node[self.depth(node)].add(node)
-        self._depth_to_node = dict(self._depth_to_node)
+            self._depth_to_nodes[self.depth(node)].add(node)
+        self._depth_to_nodes = dict(self._depth_to_nodes)
 
         # node_to_index assigns indices in order of increasing depth and then sorted node ID
         self._node_to_index = {}
         for depth in range(self.max_depth):
-            for node in sorted(self._depth_to_node):
+            for node in sorted(self._depth_to_nodes):
                 self._node_to_index[node] = len(self._node_to_index)
 
     def get_root(self) -> str:
@@ -89,6 +89,24 @@ class RootedDAG(DiGraph):
         """Gets the maximum depth of any node."""
         return self._max_depth
 
+    def depth_to_nodes(self, depth: int) -> Set[str]:
+        """Returns all the nodes at the give depth."""
+        return self._depth_to_nodes[depth]
+
+    def num_nodes_at_depth(self, depth: int) -> int:
+        """Returns the number of nodes at the given depth."""
+        return len(self._depth_to_nodes[depth])
+
+    def max_num_parents_at_depth(self, depth: int) -> int:
+        """Returns the maximum number of parents at a given depth."""
+        # TODO: cache this
+        return max(len(self.in_edges(node)) for node in self._depth_to_nodes[depth])
+
     def node_to_index(self, node: str) -> int:
         """Returns the index for a node."""
         return self._node_to_index[node]
+
+    def parents(self, node: str) -> Set[str]:
+        """Gets the parents for the given node."""
+        # TODO: cache this
+        return {edge[0] for edge in self.in_edges(node)}
