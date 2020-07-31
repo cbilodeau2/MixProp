@@ -1,5 +1,6 @@
 """Contains a model which can make predictions on the nodes of a DAG."""
-from typing import Any, List, Set
+from collections import defaultdict
+from typing import Any, Set
 
 import networkx as nx
 from networkx import DiGraph
@@ -33,6 +34,7 @@ class Node:
 
 
 class RootedDAG(DiGraph):
+    """Represents a rooted directed acyclic graph. Note: Must NOT mutate."""
     def __init__(self, nodes: Set[Node]):
         super(RootedDAG, self).__init__()
 
@@ -44,11 +46,20 @@ class RootedDAG(DiGraph):
             raise ValueError('Node relationships do not form a DAG.')
 
         self.root = self.get_root()
-        self._max_depth = None
 
-        self._node_to_index = {}
+        # Pre-compute depths of nodes, max depth in graph, and depth_to_node mapping
+        self._compute_depths()
+        self._max_depth = max(self.depth(node) for node in self.nodes)
+        self._depth_to_node = defaultdict(set)
         for node in self.nodes:
-            self._node_to_index[node] = len(self._node_to_index)
+            self._depth_to_node[self.depth(node)].add(node)
+        self._depth_to_node = dict(self._depth_to_node)
+
+        # node_to_index assigns indices in order of increasing depth and then sorted node ID
+        self._node_to_index = {}
+        for depth in range(self.max_depth):
+            for node in sorted(self._depth_to_node):
+                self._node_to_index[node] = len(self._node_to_index)
 
     def get_root(self) -> str:
         """Gets the root Node from a set of Nodes, raising a ValueError if no single Node is the root."""
@@ -62,21 +73,20 @@ class RootedDAG(DiGraph):
 
         return nodes_without_parents.pop()
 
-    def depth(self, node: str) -> int:
-        """Gets the depth of a node (i.e., longest distance from the root)."""
-        if 'depth' not in self.nodes[node]:
+    def _compute_depths(self) -> None:
+        """Computes the depth of every node (i.e., longest distance from the root)."""
+        for node in self.nodes:
             path_lengths = [len(path) for path in nx.algorithms.all_simple_paths(self, self.root, node)]
             max_path_length = max(path_lengths) if len(path_lengths) > 0 else 1
             self.nodes[node]['depth'] = max_path_length - 1
 
+    def depth(self, node: str) -> int:
+        """Gets the depth of a node (i.e., longest distance from the root)."""
         return self.nodes[node]['depth']
 
     @property
     def max_depth(self) -> int:
         """Gets the maximum depth of any node."""
-        if self._max_depth is None:
-            self._max_depth = max(self.depth(node) for node in self.nodes)
-
         return self._max_depth
 
     def node_to_index(self, node: str) -> int:
