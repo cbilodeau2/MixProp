@@ -4,6 +4,7 @@ from typing import Set
 from goatools.obo_parser import GODag
 
 from dag import RootedDAG, Node
+from dag_model import DAGModel
 
 
 def go_to_dag(go_dag: GODag, go_ids: Set[str]) -> RootedDAG:
@@ -400,4 +401,8 @@ if __name__ == '__main__':
         'GO:2000113',
         'GO:2001141'
     ]
-    go_to_dag(go_dag, go_ids)
+    dag = go_to_dag(go_dag, set(go_ids))
+    go_dag_model = DAGModel(dag, 300, 100)
+    import torch
+    embedding = torch.randn(50, 300)
+    print(go_dag_model(embedding))

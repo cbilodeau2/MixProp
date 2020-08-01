@@ -55,11 +55,11 @@ class RootedDAG(DiGraph):
             self._depth_to_nodes[self.depth(node)].add(node)
         self._depth_to_nodes = dict(self._depth_to_nodes)
 
-        # node_to_index assigns indices in order of increasing depth and then sorted node ID
+        # Assign indices to nodes in order of increasing depth and then sorted node ID
         self._node_to_index = {}
-        for depth in range(self.max_depth):
-            for node in sorted(self._depth_to_nodes):
-                self._node_to_index[node] = len(self._node_to_index)
+        for depth in range(self.max_depth + 1):
+            for node in sorted(self._depth_to_nodes[depth]):
+                self._node_to_index[node] = len(self._node_to_index) + 1  # Plus 1 for padding in DAGModel
 
     def get_root(self) -> str:
         """Gets the root Node from a set of Nodes, raising a ValueError if no single Node is the root."""
@@ -102,11 +102,11 @@ class RootedDAG(DiGraph):
         # TODO: cache this
         return max(len(self.in_edges(node)) for node in self._depth_to_nodes[depth])
 
-    def node_to_index(self, node: str) -> int:
-        """Returns the index for a node."""
-        return self._node_to_index[node]
-
     def parents(self, node: str) -> Set[str]:
         """Gets the parents for the given node."""
         # TODO: cache this
         return {edge[0] for edge in self.in_edges(node)}
+
+    def node_to_index(self, node: str) -> int:
+        """Gets the index for the given node."""
+        return self._node_to_index[node]
