@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 
-from dag import RootedDAG
+from .dag import RootedDAG
 from chemprop.nn_utils import get_activation_function
 
 
