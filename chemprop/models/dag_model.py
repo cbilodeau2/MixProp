@@ -66,7 +66,7 @@ class DAGModel(nn.Module):
             # Get nodes at this depth, sorted by index
             nodes = sorted(self.dag.depth_to_nodes(depth), key=lambda node: self.dag.node_to_index(node))
             num_nodes = len(nodes)
-            node_indices = torch.LongTensor([self.dag.node_to_index(node) for node in nodes])
+            node_indices = torch.LongTensor([self.dag.node_to_index(node) for node in nodes]).to(node_vecs)
             node_embeddings = self.node_embeddings(node_indices)  # (num_nodes, embedding_size)
             node_embeddings = node_embeddings.unsqueeze(dim=0).repeat(batch_size, 1, 1)  # (batch_size, num_nodes, embedding_size)
 
@@ -84,7 +84,7 @@ class DAGModel(nn.Module):
                 parents = sorted([self.dag.node_to_index(node) for node in self.dag.parents(node)])
                 parents += [0] * (max_num_parents - len(parents))  # TODO: need to do padding on node_vecs
                 parent_indices.append(parents)
-            parent_indices = torch.LongTensor(parent_indices)
+            parent_indices = torch.LongTensor(parent_indices).to(node_vecs)
             parent_vecs = node_vecs.index_select(dim=1, index=parent_indices.view(-1))  # (batch_size, num_nodes * max_num_parents, hidden_size)
             parent_vecs = parent_vecs.view(parent_vecs_size)  # (batch_size, num_nodes, max_num_parents, hidden_size)
 
