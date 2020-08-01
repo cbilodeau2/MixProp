@@ -43,9 +43,19 @@ class MoleculeModel(nn.Module):
 
         self.encoder = MPN(args)
 
+        if args.features_only:
+            self.first_linear_dim = args.features_size
+        else:
+            self.first_linear_dim = args.hidden_size
+            if args.use_input_features:
+                self.first_linear_dim += args.features_size
+        if args.use_taxon:
+            self.first_linear_dim += args.hidden_size
+
         if args.use_go_dag:
             self.readout = DAGModel(
                 dag=args.go_dag,
+                input_size=self.first_linear_dim,
                 hidden_size=args.hidden_size,
                 embedding_size=args.go_embedding_size,
                 activation=args.activation
@@ -68,14 +78,6 @@ class MoleculeModel(nn.Module):
         self.multiclass = args.dataset_type == 'multiclass'
         if self.multiclass:
             self.num_classes = args.multiclass_num_classes
-        if args.features_only:
-            first_linear_dim = args.features_size
-        else:
-            first_linear_dim = args.hidden_size
-            if args.use_input_features:
-                first_linear_dim += args.features_size
-        if args.use_taxon:
-            first_linear_dim += args.hidden_size
 
         dropout = nn.Dropout(args.dropout)
         activation = get_activation_function(args.activation)
@@ -84,12 +86,12 @@ class MoleculeModel(nn.Module):
         if args.ffn_num_layers == 1:
             ffn = [
                 dropout,
-                nn.Linear(first_linear_dim, self.output_size)
+                nn.Linear(self.first_linear_dim, self.output_size)
             ]
         else:
             ffn = [
                 dropout,
-                nn.Linear(first_linear_dim, args.ffn_hidden_size)
+                nn.Linear(self.first_linear_dim, args.ffn_hidden_size)
             ]
             for _ in range(args.ffn_num_layers - 2):
                 ffn.extend([

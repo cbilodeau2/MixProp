@@ -33,6 +33,7 @@ class BatchedLinear(nn.Module):
 class DAGModel(nn.Module):
     def __init__(self,
                  dag: RootedDAG,
+                 input_size: int,
                  hidden_size: int,
                  embedding_size: int,
                  activation: str = 'ReLU'):
@@ -46,16 +47,21 @@ class DAGModel(nn.Module):
             embedding_dim=embedding_size,
             padding_idx=0
         )
+        self.input_layer = nn.Linear(input_size, hidden_size)
         self.layer1 = nn.Linear(hidden_size + embedding_size, hidden_size)
         self.activation = get_activation_function(activation)
         self.layer2 = nn.Linear(hidden_size, hidden_size)
         self.output_layer = BatchedLinear(in_features=self.hidden_size, out_features=self.num_nodes)
 
-    def forward(self, embedding: torch.FloatTensor  # (batch_size, hidden_size)
+    def forward(self, embedding: torch.FloatTensor  # (batch_size, input_size)
                 ) -> torch.FloatTensor:  # (batch_size, num_nodes)
         # Get batch size and device
         batch_size = embedding.size(0)
         device = embedding.device
+
+        # Apply input layer + activation
+        embedding = self.input_layer(embedding)  # (batch_size, hidden_size)
+        embedding = self.activation(embedding)  # (batch_size, hidden_size)
 
         # Root vector is equal to input embedding
         node_vecs = embedding.unsqueeze(dim=1)  # (batch_size, 1, hidden_size)
