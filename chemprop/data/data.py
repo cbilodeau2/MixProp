@@ -94,6 +94,14 @@ class MoleculeDatapoint:
         """
         self.targets = targets
 
+    def permute_targets(self, permutation: List[int]) -> None:
+        """
+        Permutes the targets.
+
+        :param permutation: A permutation.
+        """
+        self.targets = [self.targets[i] for i in permutation]
+
     def set_lineage(self, taxon_to_index: Dict[int, int]) -> None:
         """
         Sets the lineage indices using a map from raw taxonomy ID to the indices used for embedding the taxonomy.
@@ -250,6 +258,15 @@ class MoleculeDataset(Dataset):
         assert len(self._data) == len(targets)
         for i in range(len(self._data)):
             self._data[i].set_targets(targets[i])
+
+    def permute_targets(self, permutation: List[int]) -> None:
+        """
+        Permutes the targets.
+
+        :param permutation: A permutation.
+        """
+        for d in self._data:
+            d.permute_targets(permutation)
 
     def lineages(self) -> List[List[int]]:
         """

@@ -15,7 +15,9 @@ from .predict import predict
 from .train import train
 from chemprop.args import TrainArgs
 from chemprop.constants import MODEL_FILE_NAME
-from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, split_data, StandardScaler, validate_dataset_type
+from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, split_data, StandardScaler, \
+    validate_dataset_type
+from chemprop.go_utils import load_go_dag
 from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, get_metric_func, load_checkpoint,\
@@ -56,6 +58,16 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     validate_dataset_type(data, dataset_type=args.dataset_type)
     args.features_size = data.features_size()
     debug(f'Number of tasks = {args.num_tasks}')
+
+    # Load GO DAG if necessary
+    if args.use_go_dag:
+        debug('Loading GO DAG')
+        args.go_dag = load_go_dag(go_obo_path=args.go_obo_path, go_ids=args.task_names)
+
+        # Permute tasks so that they line up with the prediction order of the DAGModel
+        permutation = sorted(range(len(args.task_names)), key=lambda i: args.go_dag.node_to_index(args.task_names[i]))
+        data.permute_targets(permutation)
+        args.task_names = [args.task_names[i] for i in permutation]
 
     # Split data
     debug(f'Splitting data with seed {args.seed}')

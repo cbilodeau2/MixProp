@@ -8,6 +8,7 @@ from typing_extensions import Literal
 import torch
 from tap import Tap  # pip install typed-argument-parser (https://github.com/swansonk14/typed-argument-parser)
 
+from chemprop.dag import RootedDAG
 from chemprop.features import get_available_features_generators
 
 
@@ -234,6 +235,15 @@ class TrainArgs(CommonArgs):
     """Number of models in ensemble."""
     lineage_embedding_type: Literal['taxon_only', 'average_lineage', 'sum_lineage', 'max_lineage', 'rnn_lineage'] = 'average_lineage'
     """The type of taxonomy lineage embedding to use. Only applied if :code:`taxon_column` is not None."""
+    use_go_dag: bool = False
+    """Whether to use the GO DAG to make predictions rather than making flat predictions for GO terms."""
+    go_embedding_size: int = 100
+    """Size of the embeddings of GO terms when :code:`go_dag_predict=True`."""
+    go_obo_path: str = 'go-basic.obo'
+    """
+    Path where GO hierarchy should loaded from (and saved if not downloaded).
+    Needed if :code:`go_dag_predict=True`.
+    """
 
     # Training arguments
     epochs: int = 30
@@ -263,6 +273,7 @@ class TrainArgs(CommonArgs):
         self._features_size = None
         self._train_data_size = None
         self._num_taxons = None
+        self._go_dag = None
 
     @property
     def minimize_score(self) -> bool:
@@ -329,6 +340,14 @@ class TrainArgs(CommonArgs):
     @num_taxons.setter
     def num_taxons(self, num_taxons: int) -> None:
         self._num_taxons = num_taxons
+
+    @property
+    def go_dag(self) -> RootedDAG:
+        return self._go_dag
+
+    @go_dag.setter
+    def go_dag(self, go_dag: RootedDAG) -> None:
+        self._go_dag = go_dag
 
     def process_args(self) -> None:
         super(TrainArgs, self).process_args()

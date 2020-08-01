@@ -5,6 +5,7 @@ from rdkit import Chem
 import torch
 import torch.nn as nn
 
+from .dag_model import DAGModel
 from .mpn import MPN
 from chemprop.args import TrainArgs
 from chemprop.features import BatchMolGraph
@@ -40,27 +41,29 @@ class MoleculeModel(nn.Module):
 
         self.lineage_embedding_type = args.lineage_embedding_type
 
-        self.create_encoder(args)
-        self.create_ffn(args)
+        self.encoder = MPN(args)
+
+        if args.use_go_dag:
+            self.readout = DAGModel(
+                dag=args.go_dag,
+                hidden_size=args.hidden_size,
+                embedding_size=args.go_embedding_size,
+                activation=args.activation
+            )
+        else:
+            self.readout = self.create_ffn(args)
 
         initialize_weights(self)
 
         if args.use_taxon:
             self.create_lineage_embedding(args)
 
-    def create_encoder(self, args: TrainArgs) -> None:
-        """
-        Creates the message passing encoder for the model.
-
-        :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
-        """
-        self.encoder = MPN(args)
-
-    def create_ffn(self, args: TrainArgs) -> None:
+    def create_ffn(self, args: TrainArgs) -> nn.Module:
         """
         Creates the feed-forward layers for the model.
 
         :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
+        :return: A PyTorch module with the feed-forward layers.
         """
         self.multiclass = args.dataset_type == 'multiclass'
         if self.multiclass:
@@ -101,7 +104,9 @@ class MoleculeModel(nn.Module):
             ])
 
         # Create FFN model
-        self.ffn = nn.Sequential(*ffn)
+        ffn = nn.Sequential(*ffn)
+
+        return ffn
 
     def create_lineage_embedding(self, args: TrainArgs) -> None:
         """
@@ -196,7 +201,7 @@ class MoleculeModel(nn.Module):
         :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: The feature vectors computed by the :class:`MoleculeModel`.
         """
-        return self.ffn[:-1](self.encoder(batch, features_batch, lineage_batch))
+        return self.readout[:-1](self.encoder(batch, features_batch, lineage_batch))
 
     def forward(self,
                 batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
@@ -218,7 +223,7 @@ class MoleculeModel(nn.Module):
         if self.featurizer:
             return self.featurize(batch, features_batch, lineage_batch)
 
-        output = self.ffn(self.encoder(batch, features_batch, lineage_batch))
+        output = self.readout(self.encoder(batch, features_batch, lineage_batch))
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:
