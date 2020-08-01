@@ -5,6 +5,7 @@ from goatools.obo_parser import GODag
 
 from dag import RootedDAG, Node
 from dag_model import DAGModel
+from chemprop.nn_utils import param_count
 
 
 def go_to_dag(go_dag: GODag, go_ids: Set[str]) -> RootedDAG:
@@ -405,4 +406,7 @@ if __name__ == '__main__':
     go_dag_model = DAGModel(dag, 300, 100)
     import torch
     embedding = torch.randn(50, 300)
+    print(go_dag_model)
+    print(param_count(go_dag_model))
+    exit()
     print(go_dag_model(embedding))

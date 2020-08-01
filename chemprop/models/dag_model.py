@@ -6,6 +6,30 @@ from dag import RootedDAG
 from chemprop.nn_utils import get_activation_function
 
 
+class BatchedLinear(nn.Module):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True):
+        super(BatchedLinear, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.W = nn.Parameter(torch.Tensor(1, out_features, in_features))
+        if bias:
+            self.bias = nn.Parameter(torch.Tensor(1, out_features))
+        else:
+            self.register_parameter('bias', None)
+
+    def forward(self, input: torch.FloatTensor  # (batch_size, out_features, in_features)
+                ) -> torch.FloatTensor:
+        output = torch.sum(input * self.W, dim=2)  # (batch_size, out_features)
+
+        if self.bias is not None:
+            output += self.bias  # (batch_size, out_features)
+
+        return output
+
+    def extra_repr(self) -> str:
+        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+
+
 class DAGModel(nn.Module):
     def __init__(self,
                  dag: RootedDAG,
@@ -14,17 +38,18 @@ class DAGModel(nn.Module):
                  activation: str = 'ReLU'):
         super(DAGModel, self).__init__()
         self.dag = dag
+        self.num_nodes = self.dag.number_of_nodes()
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
         self.node_embeddings = nn.Embedding(
-            num_embeddings=self.dag.number_of_nodes() + 1,  # Plus 1 for padding
+            num_embeddings=self.num_nodes + 1,  # Plus 1 for padding
             embedding_dim=embedding_size,
             padding_idx=0
         )
         self.layer1 = nn.Linear(hidden_size + embedding_size, hidden_size)
         self.activation = get_activation_function(activation)
         self.layer2 = nn.Linear(hidden_size, hidden_size)
-        # TODO: output layer
+        self.output_layer = BatchedLinear(in_features=self.hidden_size, out_features=self.num_nodes)
 
     def forward(self, embedding: torch.FloatTensor  # (batch_size, hidden_size)
                 ) -> torch.FloatTensor:  # (batch_size, num_nodes)
@@ -86,7 +111,6 @@ class DAGModel(nn.Module):
         node_vecs = node_vecs[:, 1:, :]  # (batch_size, total_num_nodes, hidden_size)
 
         # Final node predictions using node vecs
-        # TODO: this
-        import ipdb; ipdb.set_trace()
+        node_vecs = self.output_layer(node_vecs)
 
-        raise NotImplementedError
+        return node_vecs
