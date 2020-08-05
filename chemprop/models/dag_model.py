@@ -73,6 +73,16 @@ class DAGModel(nn.Module):
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
         self.layer_type = layer_type
+        self.use_node_embeddings = self.layer_type in ['shared', 'per_depth']
+
+        if self.layer_type == 'shared':
+            self.num_mlps = 1
+        elif self.layer_type == 'per_depth':
+            self.num_mlps = self.dag.max_depth
+        elif self.layer_type == 'per_node':
+            self.num_mlps = self.num_nodes
+        else:
+            raise ValueError(f'Layer type "{layer_type}" is not supported.')
 
         self.input_mlp = MLP(
             in_features=input_size,
@@ -81,25 +91,21 @@ class DAGModel(nn.Module):
             activation=activation
         )
 
-        if self.layer_type in ['shared', 'per_depth']:
+        if self.use_node_embeddings:
             self.node_embeddings = nn.Embedding(
                 num_embeddings=self.num_nodes + 1,  # Plus 1 for padding
                 embedding_dim=embedding_size,
                 padding_idx=0
             )
 
-            self.mlps = nn.ModuleList([
-                MLP(
-                    in_features=hidden_size + embedding_size,
-                    hidden_features=hidden_size,
-                    out_features=hidden_size
-                )
-                for _ in range(self.dag.max_depth if self.layer_type == 'per_depth' else 1)
-            ])
-        elif self.layer_type == 'per_node':
-            raise NotImplementedError
-        else:
-            raise ValueError(f'Layer type "{self.layer_type}" is not supported.')
+        self.mlps = nn.ModuleList([
+            MLP(
+                in_features=hidden_size + (embedding_size * self.use_node_embeddings),
+                hidden_features=hidden_size,
+                out_features=hidden_size
+            )
+            for _ in range(self.num_mlps)
+        ])
 
         self.output_layer = BatchedLinear(in_features=self.hidden_size, out_features=self.num_nodes)
 
@@ -194,21 +200,24 @@ class DAGModel(nn.Module):
             # Get parent vecs
             parent_vecs = self.get_parent_vecs(depth=depth, nodes=nodes, node_vecs=node_vecs)  # (batch_size, num_nodes, hidden_size)
 
-            # Get node embeddings and concatenate with parent vecs if needed
+            # Apply layers
             if self.layer_type in ['shared', 'per_depth']:
-                vecs = self.concat_node_embeddings(parent_vecs=parent_vecs, node_indices=node_indices)    # (batch_size, num_nodes, hidden_size + embedding_size)
+                # Concatenate parent vecs with node embeddings
+                vecs = self.concat_node_embeddings(parent_vecs=parent_vecs, node_indices=node_indices)  # (batch_size, num_nodes, hidden_size + embedding_size)
+
+                # Select MLP based on depth if needed
+                mlp = self.mlps[depth - 1] if self.layer_type == 'per_depth' else self.mlps[0]
+
+                # Apply MLP
+                vecs = vecs.view(-1, vecs.size(2))  # (batch_size * num_nodes, hidden_size [+ embedding_size])
+                vecs = mlp(vecs)  # (batch_size * num_nodes, hidden_size)
+                vecs = vecs.view((batch_size, len(nodes), self.hidden_size))  # (batch_size, num_nodes, hidden_size)
             elif self.layer_type == 'per_node':
-                vecs = parent_vecs  # (batch_size, num_nodes, hidden_size)
+                # Apply MLPs
+                vecs = torch.cat([self.mlps[index - 1](parent_vecs[:, i, :]).unsqueeze(dim=1)
+                                  for i, index in enumerate(node_indices)], dim=1)  # (batch_size, num_nodes, hidden_size)
             else:
                 raise ValueError(f'Layer type "{self.layer_type}" is not supported.')
-
-            # Select MLP based on depth if needed
-            mlp = self.mlps[depth - 1] if self.layer_type == 'per_depth' else self.mlps[0]
-
-            # Apply MLP
-            vecs = vecs.view(-1, vecs.size(2))  # (batch_size * num_nodes, hidden_size [+ embedding_size])
-            vecs = mlp(vecs)  # (batch_size * num_nodes, hidden_size)
-            vecs = vecs.view((batch_size, len(nodes), self.hidden_size))  # (batch_size, num_nodes, hidden_size)
 
             # Skip connection
             vecs = parent_vecs + vecs  # (batch_size, num_nodes, hidden_size)
