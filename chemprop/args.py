@@ -239,6 +239,13 @@ class TrainArgs(CommonArgs):
     """Whether to use the GO DAG to make predictions rather than making flat predictions for GO terms."""
     go_embedding_size: int = 100
     """Size of the embeddings of GO terms when :code:`go_dag_predict=True`."""
+    go_dag_layer_type: Literal['shared', 'per_depth', 'per_node'] = 'shared'
+    """
+    Type of layers in the GO :class:`~chemprop.models.DAGModel`.
+    :code:`shared`: One MLP shared across all GO terms.
+    :code:`per_depth`: A different MLP for each depth of the GO hierarchy, shared across nodes at that depth.
+    :code:`per_node`: A different MLP for each GO term. In this case, there are no separate GO embeddings.
+    """
     go_obo_path: str = 'go-basic.obo'
     """
     Path where GO hierarchy should loaded from (and saved if not downloaded).
