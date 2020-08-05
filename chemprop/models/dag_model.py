@@ -74,6 +74,13 @@ class DAGModel(nn.Module):
         self.embedding_size = embedding_size
         self.layer_type = layer_type
 
+        self.input_mlp = MLP(
+            in_features=input_size,
+            hidden_features=hidden_size,
+            out_features=hidden_size,
+            activation=activation
+        )
+
         if self.layer_type in ['shared', 'per_depth']:
             self.node_embeddings = nn.Embedding(
                 num_embeddings=self.num_nodes + 1,  # Plus 1 for padding
@@ -81,17 +88,19 @@ class DAGModel(nn.Module):
                 padding_idx=0
             )
 
-        self.input_mlp = MLP(
-            in_features=input_size,
-            hidden_features=hidden_size,
-            out_features=hidden_size,
-            activation=activation
-        )
-        self.mlp = MLP(
-            in_features=hidden_size + embedding_size,
-            hidden_features=hidden_size,
-            out_features=hidden_size
-        )
+            self.mlps = nn.ModuleList([
+                MLP(
+                    in_features=hidden_size + embedding_size,
+                    hidden_features=hidden_size,
+                    out_features=hidden_size
+                )
+                for _ in range(self.dag.max_depth if self.layer_type == 'per_depth' else 1)
+            ])
+        elif self.layer_type == 'per_node':
+            raise NotImplementedError
+        else:
+            raise ValueError(f'Layer type "{self.layer_type}" is not supported.')
+
         self.output_layer = BatchedLinear(in_features=self.hidden_size, out_features=self.num_nodes)
 
     @property
@@ -99,14 +108,17 @@ class DAGModel(nn.Module):
         """Get the current device of the model."""
         return next(self.parameters()).device
 
-    def get_nodes_and_indices(self, depth: int) -> Tuple[List[str], torch.LongTensor]:
+    def get_nodes_and_indices(self, depth: int) -> Tuple[List[str], torch.LongTensor]:  # (num_nodes,)
         """Gets nodes and indices at this depth, with both sorted according to node index."""
         nodes = sorted(self.dag.depth_to_nodes(depth), key=lambda node: self.dag.node_to_index(node))
         node_indices = torch.LongTensor([self.dag.node_to_index(node) for node in nodes]).to(self.device)
 
-        return nodes, node_indices
+        return nodes, node_indices  # (num_nodes,)
 
-    def get_parent_indices(self, depth: int, nodes: List[str]) -> torch.LongTensor:
+    def get_parent_indices(self,
+                           depth: int,
+                           nodes: List[str]  # (num_nodes,)
+                           ) -> torch.LongTensor:  # (num_nodes, max_num_parents)
         """Gets the indices of the parents with 0 as padding."""
         max_num_parents = self.dag.max_num_parents_at_depth(depth)
 
@@ -117,9 +129,13 @@ class DAGModel(nn.Module):
             parent_indices.append(parents)
         parent_indices = torch.LongTensor(parent_indices).to(self.device)  # (num_nodes, max_num_parents)
 
-        return parent_indices
+        return parent_indices  # (num_nodes, max_num_parents)
 
-    def get_parent_vecs(self, depth: int, nodes: List[str], node_vecs: torch.FloatTensor) -> torch.FloatTensor:
+    def get_parent_vecs(self,
+                        depth: int,
+                        nodes: List[str],  # (num_nodes,)
+                        node_vecs: torch.FloatTensor  # (batch_size, cumulative_num_nodes, hidden_size)
+                        ) -> torch.FloatTensor:  # (batch_size, num_nodes, hidden_size)
         """Gets the parent vectors, summing across parents to get a single input parent vector for each node."""
         # Get parent indices
         parent_indices = self.get_parent_indices(depth=depth, nodes=nodes)  # (num_nodes, max_num_parents)
@@ -141,7 +157,21 @@ class DAGModel(nn.Module):
         # Sum parent vecs to get a single parent vector for each node
         parent_vecs = parent_vecs.sum(dim=2)  # (batch_size, num_nodes, hidden_size)
 
-        return parent_vecs
+        return parent_vecs  # (batch_size, num_nodes, hidden_size)
+
+    def concat_node_embeddings(self,
+                               parent_vecs: torch.FloatTensor,  # (batch_size, num_nodes, hidden_size)
+                               node_indices: torch.FloatTensor  # (num_nodes,)
+                               ) -> torch.FloatTensor:  # (batch_size, num_nodes, hidden_size + embedding_size)
+        """Concatenates node embeddings with the parent vecs."""
+        # Get node embeddings
+        node_embeddings = self.node_embeddings(node_indices)  # (num_nodes, embedding_size)
+        node_embeddings = node_embeddings.unsqueeze(dim=0).repeat(parent_vecs.size(0), 1, 1)  # (batch_size, num_nodes, embedding_size)
+
+        # Concatenate parent vecs and node embeddings
+        vecs = torch.cat((parent_vecs, node_embeddings), dim=2)  # (batch_size, num_nodes, hidden_size + embedding_size)
+
+        return vecs  # (batch_size, num_nodes, hidden_size + embedding_size)
 
     def forward(self, embedding: torch.FloatTensor  # (batch_size, input_size)
                 ) -> torch.FloatTensor:  # (batch_size, num_nodes)
@@ -159,21 +189,25 @@ class DAGModel(nn.Module):
         # Computing
         for depth in range(1, self.dag.max_depth + 1):
             # Get nodes and indices for nodes at this depth, sorted by index
-            nodes, node_indices = self.get_nodes_and_indices(depth=depth)
-
-            # Get node embeddings
-            node_embeddings = self.node_embeddings(node_indices)  # (num_nodes, embedding_size)
-            node_embeddings = node_embeddings.unsqueeze(dim=0).repeat(batch_size, 1, 1)  # (batch_size, num_nodes, embedding_size)
+            nodes, node_indices = self.get_nodes_and_indices(depth=depth)  # (num_nodes,)
 
             # Get parent vecs
-            parent_vecs = self.get_parent_vecs(depth=depth, nodes=nodes, node_vecs=node_vecs)
+            parent_vecs = self.get_parent_vecs(depth=depth, nodes=nodes, node_vecs=node_vecs)  # (batch_size, num_nodes, hidden_size)
 
-            # Concatenate parent vecs and node vecs
-            vecs = torch.cat((parent_vecs, node_embeddings), dim=2)  # (batch_size, num_nodes, hidden_size + embedding_size)
+            # Get node embeddings and concatenate with parent vecs if needed
+            if self.layer_type in ['shared', 'per_depth']:
+                vecs = self.concat_node_embeddings(parent_vecs=parent_vecs, node_indices=node_indices)    # (batch_size, num_nodes, hidden_size + embedding_size)
+            elif self.layer_type == 'per_node':
+                vecs = parent_vecs  # (batch_size, num_nodes, hidden_size)
+            else:
+                raise ValueError(f'Layer type "{self.layer_type}" is not supported.')
+
+            # Select MLP based on depth if needed
+            mlp = self.mlps[depth - 1] if self.layer_type == 'per_depth' else self.mlps[0]
 
             # Apply MLP
-            vecs = vecs.view(-1, vecs.size(2))  # (batch_size * num_nodes, hidden_size + embedding_size)
-            vecs = self.mlp(vecs)  # (batch_size * num_nodes, hidden_size)
+            vecs = vecs.view(-1, vecs.size(2))  # (batch_size * num_nodes, hidden_size [+ embedding_size])
+            vecs = mlp(vecs)  # (batch_size * num_nodes, hidden_size)
             vecs = vecs.view((batch_size, len(nodes), self.hidden_size))  # (batch_size, num_nodes, hidden_size)
 
             # Skip connection

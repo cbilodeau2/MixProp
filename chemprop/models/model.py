@@ -58,6 +58,7 @@ class MoleculeModel(nn.Module):
                 input_size=self.first_linear_dim,
                 hidden_size=args.hidden_size,
                 embedding_size=args.go_embedding_size,
+                layer_type=args.go_dag_layer_type,
                 activation=args.activation
             )
         else:
