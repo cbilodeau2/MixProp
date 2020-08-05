@@ -24,10 +24,30 @@ class BatchedLinear(nn.Module):
         if self.bias is not None:
             output += self.bias  # (batch_size, out_features)
 
-        return output
+        return output  # (batch_size, out_feature)
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'
+
+
+class MLP(nn.Module):
+    def __init__(self,
+                 in_features: int,
+                 hidden_features: int,
+                 out_features: int,
+                 activation: str = 'ReLU'):
+        super(MLP, self).__init__()
+        self.layer1 = nn.Linear(in_features, hidden_features)
+        self.activation = get_activation_function(activation)
+        self.layer2 = nn.Linear(hidden_features, out_features)
+
+    def forward(self, input: torch.FloatTensor  # (batch_size, in_features)
+                ) -> torch.FloatTensor:  # (batch_size, out_features)
+        output = self.layer1(input)  # (batch_size, hidden_features)
+        output = self.activation(output)  # (batch_size, hidden_features)
+        output = self.layer2(output)  # (batch_size, out_features)
+
+        return output  # (batch_size, out_features)
 
 
 class DAGModel(nn.Module):
@@ -47,10 +67,17 @@ class DAGModel(nn.Module):
             embedding_dim=embedding_size,
             padding_idx=0
         )
-        self.input_layer = nn.Linear(input_size, hidden_size)
-        self.layer1 = nn.Linear(hidden_size + embedding_size, hidden_size)
-        self.activation = get_activation_function(activation)
-        self.layer2 = nn.Linear(hidden_size, hidden_size)
+        self.input_mlp = MLP(
+            in_features=input_size,
+            hidden_features=hidden_size,
+            out_features=hidden_size,
+            activation=activation
+        )
+        self.mlp = MLP(
+            in_features=hidden_size + embedding_size,
+            hidden_features=hidden_size,
+            out_features=hidden_size
+        )
         self.output_layer = BatchedLinear(in_features=self.hidden_size, out_features=self.num_nodes)
 
     def forward(self, embedding: torch.FloatTensor  # (batch_size, input_size)
@@ -59,9 +86,8 @@ class DAGModel(nn.Module):
         batch_size = embedding.size(0)
         device = embedding.device
 
-        # Apply input layer + activation
-        embedding = self.input_layer(embedding)  # (batch_size, hidden_size)
-        embedding = self.activation(embedding)  # (batch_size, hidden_size)
+        # Apply input MLP
+        embedding = self.input_mlp(embedding)  # (batch_size, hidden_size)
 
         # Root vector is equal to input embedding
         node_vecs = embedding.unsqueeze(dim=1)  # (batch_size, 1, hidden_size)
@@ -89,7 +115,7 @@ class DAGModel(nn.Module):
             parent_indices = []
             for node in nodes:
                 parents = sorted([self.dag.node_to_index(node) for node in self.dag.parents(node)])
-                parents += [0] * (max_num_parents - len(parents))  # TODO: need to do padding on node_vecs
+                parents += [0] * (max_num_parents - len(parents))
                 parent_indices.append(parents)
             parent_indices = torch.LongTensor(parent_indices).to(device)
             parent_vecs = node_vecs.index_select(dim=1, index=parent_indices.view(-1))  # (batch_size, num_nodes * max_num_parents, hidden_size)
@@ -101,11 +127,9 @@ class DAGModel(nn.Module):
             # Concatenate parent vecs and node vecs
             vecs = torch.cat((parent_vecs, node_embeddings), dim=2)  # (batch_size, num_nodes, hidden_size + embedding_size)
 
-            # Apply neural network layers
+            # Apply MLP
             vecs = vecs.view(-1, vecs.size(2))  # (batch_size * num_nodes, hidden_size + embedding_size)
-            vecs = self.layer1(vecs)  # (batch_size * num_nodes, hidden_size)
-            vecs = self.activation(vecs)  # (batch_size * num_nodes, hidden_size)
-            vecs = self.layer2(vecs)  # (batch_size * num_nodes, hidden_size)
+            vecs = self.mlp(vecs)  # (batch_size * num_nodes, hidden_size)
             vecs = vecs.view((batch_size, num_nodes, self.hidden_size))  # (batch_size, num_nodes, hidden_size)
 
             # Skip connection
