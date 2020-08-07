@@ -15,13 +15,13 @@ from chemprop.nn_utils import get_activation_function, initialize_weights
 class CombineEncodedReadout(nn.Module):
     """Modules which combines the molecule encoding and readout to perform one additional prediction."""
 
-    def __init__(self, args: TrainArgs):
+    def __init__(self, encoded_size: int, readout_size: int, hidden_size: int, activation: str):
         super(CombineEncodedReadout, self).__init__()
         self.mlp = MLP(
-            in_features=args.hidden_size + args.num_tasks - 1,
-            hidden_features=args.hidden_size,
+            in_features=encoded_size + readout_size,
+            hidden_features=hidden_size,
             out_features=1,
-            activation=args.activation
+            activation=activation
         )
 
     def forward(self,
@@ -94,7 +94,12 @@ class MoleculeModel(nn.Module):
             self.readout = self.create_ffn(args)
 
         if self.organism_and_go:
-            self.combine = CombineEncodedReadout(args)
+            self.combine = CombineEncodedReadout(
+                encoded_size=self.first_linear_dim,
+                readout_size=self.output_size - 1,
+                hidden_size=args.hidden_size,
+                activation=args.activation
+            )
         else:
             self.combine = combine_readout_only
 
