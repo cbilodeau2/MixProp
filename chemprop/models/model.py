@@ -5,11 +5,39 @@ from rdkit import Chem
 import torch
 import torch.nn as nn
 
-from .dag_model import DAGModel
+from .dag_model import DAGModel, MLP
 from .mpn import MPN
 from chemprop.args import TrainArgs
 from chemprop.features import BatchMolGraph
 from chemprop.nn_utils import get_activation_function, initialize_weights
+
+
+class CombineEncodedReadout(nn.Module):
+    """Modules which combines the molecule encoding and readout to perform one additional prediction."""
+
+    def __init__(self, args: TrainArgs):
+        super(CombineEncodedReadout, self).__init__()
+        self.mlp = MLP(
+            in_features=args.hidden_size + args.num_tasks - 1,
+            hidden_features=args.hidden_size,
+            out_features=1,
+            activation=args.activation
+        )
+
+    def forward(self,
+                encoded: torch.FloatTensor,  # (batch_size, hidden_size)
+                readout: torch.FloatTensor  # (batch_size, output_size - 1)
+                ) -> torch.FloatTensor:  # (batch_size, output_size)
+        input = torch.cat((encoded, readout), dim=1)  # (batch_size, hidden_size + output_size - 1)
+        output = self.mlp(input)  # (batch_size, 1)
+        output = torch.cat((output, readout), dim=1)  # (batch_size, output_size)
+
+        return output
+
+
+def combine_readout_only(encoded: torch.FloatTensor, readout: torch.FloatTensor) -> torch.FloatTensor:
+    """Returns the readout only."""
+    return readout
 
 
 class MoleculeModel(nn.Module):
@@ -28,6 +56,7 @@ class MoleculeModel(nn.Module):
         self.multiclass = args.dataset_type == 'multiclass'
         self.featurizer = featurizer
         self.device = args.device
+        self.organism_and_go = args.organism_and_go
 
         self.output_size = args.num_tasks
         if self.multiclass:
@@ -64,6 +93,11 @@ class MoleculeModel(nn.Module):
         else:
             self.readout = self.create_ffn(args)
 
+        if self.organism_and_go:
+            self.combine = CombineEncodedReadout(args)
+        else:
+            self.combine = combine_readout_only
+
         initialize_weights(self)
 
         if args.use_taxon:
@@ -76,6 +110,7 @@ class MoleculeModel(nn.Module):
         :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
         :return: A PyTorch module with the feed-forward layers.
         """
+        output_size = self.output_size - 1 if self.organism_and_go else self.output_size
         self.multiclass = args.dataset_type == 'multiclass'
         if self.multiclass:
             self.num_classes = args.multiclass_num_classes
@@ -87,7 +122,7 @@ class MoleculeModel(nn.Module):
         if args.ffn_num_layers == 1:
             ffn = [
                 dropout,
-                nn.Linear(self.first_linear_dim, self.output_size)
+                nn.Linear(self.first_linear_dim, output_size)
             ]
         else:
             ffn = [
@@ -103,7 +138,7 @@ class MoleculeModel(nn.Module):
             ffn.extend([
                 activation,
                 dropout,
-                nn.Linear(args.ffn_hidden_size, self.output_size),
+                nn.Linear(args.ffn_hidden_size, output_size),
             ])
 
         # Create FFN model
@@ -226,7 +261,9 @@ class MoleculeModel(nn.Module):
         if self.featurizer:
             return self.featurize(batch, features_batch, lineage_batch)
 
-        output = self.readout(self.encoder(batch, features_batch, lineage_batch))
+        encoded = self.encoder(batch, features_batch, lineage_batch)
+        readout = self.readout(encoded)
+        output = self.combine(encoded, readout)
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:

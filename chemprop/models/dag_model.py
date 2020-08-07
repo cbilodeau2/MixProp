@@ -214,6 +214,7 @@ class DAGModel(nn.Module):
                 vecs = vecs.view((batch_size, len(nodes), self.hidden_size))  # (batch_size, num_nodes, hidden_size)
             elif self.layer_type == 'per_node':
                 # Apply MLPs
+                # TODO: batch this
                 vecs = torch.cat([self.mlps[index - 1](parent_vecs[:, i, :]).unsqueeze(dim=1)
                                   for i, index in enumerate(node_indices)], dim=1)  # (batch_size, num_nodes, hidden_size)
             else:

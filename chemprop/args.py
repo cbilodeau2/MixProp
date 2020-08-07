@@ -251,6 +251,12 @@ class TrainArgs(CommonArgs):
     Path where GO hierarchy should loaded from (and saved if not downloaded).
     Needed if :code:`go_dag_predict=True`.
     """
+    organism_and_go: bool = False
+    """
+    Whether to jointly predict organism inhibition and GO term activity.
+    Organism inhibition is assumed to be in the first target column
+    while GO term activities are in the remaining columns.
+    """
 
     # Training arguments
     epochs: int = 30

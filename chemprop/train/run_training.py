@@ -65,7 +65,9 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
         args.go_dag = load_go_dag(go_obo_path=args.go_obo_path, go_ids=args.task_names)
 
         # Permute tasks so that they line up with the prediction order of the DAGModel
-        permutation = sorted(range(len(args.task_names)), key=lambda i: args.go_dag.node_to_index(args.task_names[i]))
+        task_names = args.task_names[1:] if args.organism_and_go else args.task_names
+        permutation = sorted(range(len(task_names)), key=lambda i: args.go_dag.node_to_index(task_names[i]))
+        permutation = [0] + [i + 1 for i in permutation] if args.organism_and_go else permutation
         data.permute_targets(permutation)
         args.task_names = [args.task_names[i] for i in permutation]
 
