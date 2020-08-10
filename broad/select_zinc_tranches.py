@@ -27,38 +27,34 @@ ZINC_TRANCHE_SIZES = {
 
 class Args(Tap):
     antibiotics_path: str  # Path to CSV file containing antibiotics with tranches labelled by compute_zinc_tranches.py.
-    data_path: str = None  # Path to CSV file containing molecules with tranches labelled by compute_zinc_tranches.py.
-    selection_type: Literal['zinc', 'data', 'number'] = 'zinc'  # Type of tranche selection to perform.
+    data_path: str  # Path to CSV file containing molecules with tranches labelled by compute_zinc_tranches.py.
+    goal_size: int = float('inf')  # The desired number of molecules to select by selecting tranches (will select at least this many).
+    selection_type: Literal['data', 'zinc', 'number'] = 'data'  # Type of tranche selection to perform.
     """
-    'zinc' computes the ratio of antibiotics per tranche to ZINC molecules per tranche.
     'data' computes the ratio of antibiotics per tranche to data molecules per tranche, with data from data_path.
+    'zinc' computes the ratio of antibiotics per tranche to ZINC molecules per tranche.
     'number' computes the raw number of antibiotics per tranche (i.e., no normalization).
     """
-    top_k: int = None  # The number of tranches to select.
 
 
 def select_zinc_trances(args: Args) -> None:
     """Selects the ZINC tranches which have the highest proportion of antibiotics."""
-    # Checks
-    if (args.selection_type == 'data') != (args.data_path is not None):
-        raise ValueError('data selection type can be used if and only if a data path is provided.')
-
     # Load data
     antibiotics = pd.read_csv(args.antibiotics_path)
     antibiotic_tranches_sizes = antibiotics['tranche'].value_counts()
 
-    # Sort tranches depending on selection type
-    if args.selection_type == 'zinc':
-        tranche_scores = {
-            tranche: antibiotic_tranches_sizes[tranche] / ZINC_TRANCHE_SIZES[tranche]
-            for tranche in antibiotic_tranches_sizes.keys()
-        }
-    elif args.selection_type == 'data':
-        data = pd.read_csv(args.data_path)
-        data_tranche_sizes = data['tranche'].value_counts()
+    data = pd.read_csv(args.data_path)
+    data_tranche_sizes = data['tranche'].value_counts()
 
+    # Sort tranches depending on selection type
+    if args.selection_type == 'data':
         tranche_scores = {
             tranche: antibiotic_tranches_sizes[tranche] / data_tranche_sizes[tranche]
+            for tranche in antibiotic_tranches_sizes.keys()
+        }
+    elif args.selection_type == 'zinc':
+        tranche_scores = {
+            tranche: antibiotic_tranches_sizes[tranche] / ZINC_TRANCHE_SIZES[tranche]
             for tranche in antibiotic_tranches_sizes.keys()
         }
     elif args.selection_type == 'number':
@@ -66,14 +62,24 @@ def select_zinc_trances(args: Args) -> None:
     else:
         raise ValueError(f'Selection type "{args.selection_type}" not supported.')
 
-    # Select top tranches
+    # Sort tranches by score
     tranches = sorted(antibiotic_tranches_sizes.keys(),
                       key=lambda tranche: tranche_scores[tranche],
                       reverse=True)
 
-    # Print top tranches
-    for tranche in tranches[:args.top_k]:
-        print(f'{tranche}\t{tranche_scores[tranche]:.6f}')
+    # Print selected tranches
+    num_molecules = 0
+    num_tranches = 0
+    for tranche in tranches:
+        print(f'{tranche}\t{tranche_scores[tranche]:.6f}\t{data_tranche_sizes[tranche]:,}')
+        num_molecules += data_tranche_sizes[tranche]
+        num_tranches += 1
+
+        if num_molecules >= args.goal_size:
+            break
+
+    print(f'\nTotal number of molecules = {num_molecules:,}')
+    print(f'Total number of tranches = {num_tranches:,}')
 
 
 if __name__ == '__main__':
