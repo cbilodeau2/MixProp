@@ -1,10 +1,14 @@
 """Selects the ZINC tranches which have the highest proportion of antibiotics."""
+from collections import defaultdict
+from typing import Dict, Union
 from typing_extensions import Literal
 
+import matplotlib.pyplot as plt
 import pandas as pd
 from tap import Tap  # pip install typed-argument-parser https://github.com/swansonk14/typed-argument-parser
 
 ZINC_LETTERS = 'ABCDEFGHIJK'
+ZINC_TRANCHES = [f'{l1}{l2}' for l1 in ZINC_LETTERS for l2 in ZINC_LETTERS]
 ZINC_TRANCHE_SIZES = [
     [29293, 204598, 784279, 1125069, 2321356, 854208, 300607, 128558, 99872, 86323, 5615],
     [142690, 1067035, 3992760, 5372590, 10975901, 3784188, 1767726, 775279, 606137, 558305, 3798],
@@ -35,32 +39,58 @@ class Args(Tap):
     'zinc' computes the ratio of antibiotics per tranche to ZINC molecules per tranche.
     'number' computes the raw number of antibiotics per tranche (i.e., no normalization).
     """
+    plot: bool = False  # Whether to plot tranche sizes and scores.
+
+
+def plot_tranche_sizes(tranche_sizes: Dict[str, Union[int, float]], title: str = None) -> None:
+    """Plots ZINC tranche sizes."""
+    size_grid = [
+        [tranche_sizes[f'{l2}{l1}'] for l2 in ZINC_LETTERS]
+        for l1 in ZINC_LETTERS
+    ]
+    plt.imshow(size_grid, cmap=plt.get_cmap('Blues'))
+    plt.colorbar()
+    plt.xticks(ticks=range(len(ZINC_LETTERS)), labels=list(ZINC_LETTERS))
+    plt.yticks(ticks=range(len(ZINC_LETTERS)), labels=list(ZINC_LETTERS))
+    plt.xlabel('Molecular Weight')
+    plt.ylabel('LogP')
+    plt.title('Tranche sizes' if title is None else title)
+    plt.show()
 
 
 def select_zinc_trances(args: Args) -> None:
     """Selects the ZINC tranches which have the highest proportion of antibiotics."""
     # Load data
     antibiotics = pd.read_csv(args.antibiotics_path)
-    antibiotic_tranches_sizes = antibiotics['tranche'].value_counts()
+    antibiotic_tranches_sizes = defaultdict(int, antibiotics['tranche'].value_counts())
 
     data = pd.read_csv(args.data_path)
-    data_tranche_sizes = data['tranche'].value_counts()
+    data_tranche_sizes = defaultdict(int, data['tranche'].value_counts())
 
     # Sort tranches depending on selection type
     if args.selection_type == 'data':
-        tranche_scores = {
-            tranche: antibiotic_tranches_sizes[tranche] / data_tranche_sizes[tranche]
-            for tranche in antibiotic_tranches_sizes.keys()
-        }
+        score_title = 'Antibiotic / data ratio'
+        tranche_scores = defaultdict(float, {
+            tranche: antibiotic_tranches_sizes[tranche] / data_tranche_sizes[tranche] if data_tranche_sizes[tranche] > 0 else 0
+            for tranche in ZINC_TRANCHES
+        })
     elif args.selection_type == 'zinc':
-        tranche_scores = {
+        score_title = 'Antibiotic / ZINC ratio'
+        tranche_scores = defaultdict(float, {
             tranche: antibiotic_tranches_sizes[tranche] / ZINC_TRANCHE_SIZES[tranche]
-            for tranche in antibiotic_tranches_sizes.keys()
-        }
+            for tranche in ZINC_TRANCHES
+        })
     elif args.selection_type == 'number':
+        score_title = 'Antibiotic count'
         tranche_scores = antibiotic_tranches_sizes
     else:
         raise ValueError(f'Selection type "{args.selection_type}" not supported.')
+
+    if args.plot:
+        plot_tranche_sizes(antibiotic_tranches_sizes, title='Antibiotic tranche sizes')
+        plot_tranche_sizes(data_tranche_sizes, title='Data tranche sizes')
+        plot_tranche_sizes(ZINC_TRANCHE_SIZES, title='ZINC tranche sizes')
+        plot_tranche_sizes(tranche_scores, title=score_title)
 
     # Sort tranches by score
     tranches = sorted(antibiotic_tranches_sizes.keys(),
