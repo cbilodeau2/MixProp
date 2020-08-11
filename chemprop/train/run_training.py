@@ -95,7 +95,9 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
             taxon_to_index[taxon] = len(taxon_to_index) + 1  # Keep 0 as padding index
 
         # Use taxon to index map to update lineages
-        data.set_lineages(taxon_to_index)
+        train_data.set_lineages(taxon_to_index)
+        val_data.set_lineages(taxon_to_index)
+        test_data.set_lineages(taxon_to_index)
 
         # Keep track of taxon_to_index in args
         args.num_taxons = len(taxon_to_index)
