@@ -86,6 +86,7 @@ def select_zinc_trances(args: Args) -> None:
     else:
         raise ValueError(f'Selection type "{args.selection_type}" not supported.')
 
+    # Plot tranche sizes
     if args.plot:
         plot_tranche_sizes(antibiotic_tranches_sizes, title='Antibiotic tranche sizes')
         plot_tranche_sizes(data_tranche_sizes, title='Data tranche sizes')
