@@ -1,11 +1,13 @@
 """Selects the ZINC tranches which have the highest proportion of antibiotics."""
 from collections import defaultdict
+import csv
+import os
 from typing import Dict, Union
-from typing_extensions import Literal
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from tap import Tap  # pip install typed-argument-parser https://github.com/swansonk14/typed-argument-parser
+
 
 ZINC_LETTERS = 'ABCDEFGHIJK'
 ZINC_TRANCHES = [f'{l1}{l2}' for l1 in ZINC_LETTERS for l2 in ZINC_LETTERS]
@@ -32,13 +34,7 @@ ZINC_TRANCHE_SIZES = {
 class Args(Tap):
     antibiotics_path: str  # Path to CSV file containing antibiotics with tranches labelled by compute_zinc_tranches.py.
     data_path: str  # Path to CSV file containing molecules with tranches labelled by compute_zinc_tranches.py.
-    goal_size: int = float('inf')  # The desired number of molecules to select by selecting tranches (will select at least this many).
-    selection_type: Literal['data', 'zinc', 'number'] = 'data'  # Type of tranche selection to perform.
-    """
-    'data' computes the ratio of antibiotics per tranche to data molecules per tranche, with data from data_path.
-    'zinc' computes the ratio of antibiotics per tranche to ZINC molecules per tranche.
-    'number' computes the raw number of antibiotics per tranche (i.e., no normalization).
-    """
+    save_path: str  # Path to CSV file where ratios will be saved.
     plot: bool = False  # Whether to plot tranche sizes and scores.
 
 
@@ -62,55 +58,54 @@ def select_zinc_trances(args: Args) -> None:
     """Selects the ZINC tranches which have the highest proportion of antibiotics."""
     # Load data
     antibiotics = pd.read_csv(args.antibiotics_path)
-    antibiotic_tranches_sizes = defaultdict(int, antibiotics['tranche'].value_counts())
+    antibiotic_tranche_sizes = defaultdict(int, antibiotics['tranche'].value_counts())
 
     data = pd.read_csv(args.data_path)
     data_tranche_sizes = defaultdict(int, data['tranche'].value_counts())
 
-    # Sort tranches depending on selection type
-    if args.selection_type == 'data':
-        score_title = 'Antibiotic / data ratio'
-        tranche_scores = defaultdict(float, {
-            tranche: antibiotic_tranches_sizes[tranche] / data_tranche_sizes[tranche] if data_tranche_sizes[tranche] > 0 else 0
-            for tranche in ZINC_TRANCHES
-        })
-    elif args.selection_type == 'zinc':
-        score_title = 'Antibiotic / ZINC ratio'
-        tranche_scores = defaultdict(float, {
-            tranche: antibiotic_tranches_sizes[tranche] / ZINC_TRANCHE_SIZES[tranche]
-            for tranche in ZINC_TRANCHES
-        })
-    elif args.selection_type == 'number':
-        score_title = 'Antibiotic count'
-        tranche_scores = antibiotic_tranches_sizes
-    else:
-        raise ValueError(f'Selection type "{args.selection_type}" not supported.')
+    # Compute ratios of antibiotics to data or ZINC
+    antibiotic_data_ratio = defaultdict(float, {
+        tranche: antibiotic_tranche_sizes[tranche] / data_tranche_sizes[tranche] if data_tranche_sizes[tranche] > 0 else 0
+        for tranche in ZINC_TRANCHES
+    })
+    antibiotic_zinc_ratio = defaultdict(float, {
+        tranche: antibiotic_tranche_sizes[tranche] / ZINC_TRANCHE_SIZES[tranche]
+        for tranche in ZINC_TRANCHES
+    })
 
-    # Plot tranche sizes
+    # Plot tranche sizes/ratios
     if args.plot:
-        plot_tranche_sizes(antibiotic_tranches_sizes, title='Antibiotic tranche sizes')
+        plot_tranche_sizes(antibiotic_tranche_sizes, title='Antibiotic tranche sizes')
         plot_tranche_sizes(data_tranche_sizes, title='Data tranche sizes')
         plot_tranche_sizes(ZINC_TRANCHE_SIZES, title='ZINC tranche sizes')
-        plot_tranche_sizes(tranche_scores, title=score_title)
+        plot_tranche_sizes(antibiotic_data_ratio, title='Antibiotic / data ratio')
+        plot_tranche_sizes(antibiotic_zinc_ratio, title='Antibiotic / ZINC ratio')
 
-    # Sort tranches by score
-    tranches = sorted(antibiotic_tranches_sizes.keys(),
-                      key=lambda tranche: tranche_scores[tranche],
-                      reverse=True)
+    # Create save directory
+    save_dir = os.path.dirname(args.save_path)
+    os.makedirs(save_dir, exist_ok=True)
 
-    # Print selected tranches
-    num_molecules = 0
-    num_tranches = 0
-    for tranche in tranches:
-        print(f'{tranche}\t{tranche_scores[tranche]:.6f}\t{data_tranche_sizes[tranche]:,}')
-        num_molecules += data_tranche_sizes[tranche]
-        num_tranches += 1
+    # Save ratios
+    with open(args.save_path, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            'Tranche',
+            'Antibiotic / data ratio',
+            'Antibiotic / ZINC ratio',
+            '# Antibiotics',
+            '# Data',
+            '# ZINC'
+        ])
 
-        if num_molecules >= args.goal_size:
-            break
-
-    print(f'\nTotal number of molecules = {num_molecules:,}')
-    print(f'Total number of tranches = {num_tranches:,}')
+        for tranche in ZINC_TRANCHES:
+            writer.writerow([
+                tranche,
+                antibiotic_data_ratio[tranche],
+                antibiotic_zinc_ratio[tranche],
+                antibiotic_tranche_sizes[tranche],
+                data_tranche_sizes[tranche],
+                ZINC_TRANCHE_SIZES[tranche]
+            ])
 
 
 if __name__ == '__main__':
