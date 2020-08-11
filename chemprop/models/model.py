@@ -158,7 +158,7 @@ class MoleculeModel(nn.Module):
         :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
         """
         self.taxon_embedder = nn.Embedding(
-            num_embeddings=args.num_taxons,
+            num_embeddings=args.num_taxons + 1,  # Plus 1 for padding
             embedding_dim=args.hidden_size,
             padding_idx=0
         )

@@ -87,6 +87,19 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     else:
         train_data, val_data, test_data = split_data(data=data, split_type=args.split_type, sizes=args.split_sizes, seed=args.seed, num_folds=args.num_folds, args=args, logger=logger)
 
+    if args.use_taxon:
+        # Map taxonomy IDs to indices
+        taxons = {taxon for data_split in [train_data, val_data, test_data] for d in data_split for taxon in d.raw_lineage}
+        taxon_to_index = {}
+        for taxon in sorted(taxons):
+            taxon_to_index[taxon] = len(taxon_to_index) + 1  # Keep 0 as padding index
+
+        # Use taxon to index map to update lineages
+        data.set_lineages(taxon_to_index)
+
+        # Keep track of taxon_to_index in args
+        args.num_taxons = len(taxon_to_index)
+
     if args.dataset_type == 'classification':
         class_sizes = get_class_sizes(data)
         debug('Class sizes')
