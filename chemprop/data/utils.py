@@ -137,13 +137,15 @@ def get_data(path: str,
 
     if args is not None:
         # Prefer explicit function arguments but default to args if not provided
-        # TODO: add taxon_column and NCBI here
         smiles_column = smiles_column if smiles_column is not None else args.smiles_column
         target_columns = target_columns if target_columns is not None else args.target_columns
         ignore_columns = ignore_columns if ignore_columns is not None else args.ignore_columns
         features_path = features_path if features_path is not None else args.features_path
         features_generator = features_generator if features_generator is not None else args.features_generator
         max_data_size = max_data_size if max_data_size is not None else args.max_data_size
+        use_taxon = args.use_taxon
+    else:
+        use_taxon = False
 
     max_data_size = max_data_size or float('inf')
 
@@ -159,7 +161,7 @@ def get_data(path: str,
     skip_smiles = set()
 
     # Load NCBI
-    if args.use_taxon:
+    if use_taxon:
         ncbi = NCBITaxa(args.ncbi_dbfile, args.ncbi_taxdump_file)
 
     # Load data
@@ -188,7 +190,7 @@ def get_data(path: str,
             all_smiles.append(smiles)
             all_targets.append(targets)
 
-            if args.use_taxon:
+            if use_taxon:
                 all_lineages.append(ncbi.get_lineage(row[args.taxon_column]))
 
             if store_row:
@@ -201,7 +203,7 @@ def get_data(path: str,
             MoleculeDatapoint(
                 smiles=smiles,
                 targets=targets,
-                raw_lineage=all_lineages[i] if args.use_taxon else None,
+                raw_lineage=all_lineages[i] if use_taxon else None,
                 row=all_rows[i] if store_row else None,
                 features_generator=features_generator,
                 features=features_data[i] if features_data is not None else None
