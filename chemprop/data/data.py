@@ -102,6 +102,14 @@ class MoleculeDatapoint:
         """
         self.targets = [self.targets[i] for i in permutation]
 
+    def replace_target_nones(self, token: float) -> None:
+        """
+        Replaces the Nones in the targets with the provided token.
+
+        :param token: The token to use in place of None in the targets.
+        """
+        self.targets = [target if target is not None else token for target in self.targets]
+
     def set_lineage(self, taxon_to_index: Dict[int, int]) -> None:
         """
         Sets the lineage indices using a map from raw taxonomy ID to the indices used for embedding the taxonomy.
@@ -267,6 +275,15 @@ class MoleculeDataset(Dataset):
         """
         for d in self._data:
             d.permute_targets(permutation)
+
+    def replace_target_nones(self, token: float) -> None:
+        """
+        Replaces the Nones in the targets with the provided token.
+
+        :param token: The token to use in place of None in the targets.
+        """
+        for d in self._data:
+            d.replace_target_nones(token)
 
     def lineages(self) -> List[List[int]]:
         """

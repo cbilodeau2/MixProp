@@ -102,6 +102,14 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
         # Keep track of taxon_to_index in args
         args.num_taxons = len(taxon_to_index)
 
+    # Infer inactives
+    if args.infer_inactive in ['train', 'all']:
+        train_data.replace_target_nones(token=0.0)
+
+    if args.infer_inactive == 'all':
+        val_data.replace_target_nones(token=0.0)
+        test_data.replace_target_nones(token=0.0)
+
     if args.dataset_type == 'classification':
         class_sizes = get_class_sizes(data)
         debug('Class sizes')
