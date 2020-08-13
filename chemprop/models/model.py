@@ -57,15 +57,13 @@ class MoleculeModel(nn.Module):
         self.featurizer = featurizer
         self.device = args.device
         self.organism_and_go = args.organism_and_go
-
         self.output_size = args.num_tasks
-        if self.multiclass:
-            self.output_size *= args.multiclass_num_classes
 
         if self.classification:
             self.sigmoid = nn.Sigmoid()
 
         if self.multiclass:
+            self.output_size *= args.multiclass_num_classes
             self.multiclass_softmax = nn.Softmax(dim=2)
             self.num_classes = args.multiclass_num_classes
 
