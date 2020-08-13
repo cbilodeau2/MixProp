@@ -67,6 +67,7 @@ class MoleculeModel(nn.Module):
 
         if self.multiclass:
             self.multiclass_softmax = nn.Softmax(dim=2)
+            self.num_classes = args.multiclass_num_classes
 
         self.lineage_embedding_type = args.lineage_embedding_type
 
@@ -116,10 +117,6 @@ class MoleculeModel(nn.Module):
         :return: A PyTorch module with the feed-forward layers.
         """
         output_size = self.output_size - 1 if self.organism_and_go else self.output_size
-        self.multiclass = args.dataset_type == 'multiclass'
-        if self.multiclass:
-            self.num_classes = args.multiclass_num_classes
-
         dropout = nn.Dropout(args.dropout)
         activation = get_activation_function(args.activation)
 
