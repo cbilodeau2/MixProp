@@ -107,6 +107,7 @@ def get_data(path: str,
              target_columns: List[str] = None,
              ignore_columns: List[str] = None,
              skip_invalid_smiles: bool = True,
+             skip_none_targets: bool = False,
              args: Union[TrainArgs, PredictArgs] = None,
              features_path: List[str] = None,
              features_generator: List[str] = None,
@@ -122,6 +123,7 @@ def get_data(path: str,
                            except the :code:`smiles_column` and the :code:`ignore_columns`.
     :param ignore_columns: Name of the columns to ignore when :code:`target_columns` is not provided.
     :param skip_invalid_smiles: Whether to skip and filter out invalid smiles using :func:`filter_invalid_smiles`.
+    :param skip_none_targets: Skips molecules with all None targets.
     :param args: Arguments, either :class:`~chemprop.args.TrainArgs` or :class:`~chemprop.args.PredictArgs`.
     :param features_path: A list of paths to files containing features. If provided, it is used
                           in place of :code:`args.features_path`.
@@ -186,6 +188,9 @@ def get_data(path: str,
                 continue
 
             targets = [float(row[column]) if row[column] != '' else None for column in target_columns]
+
+            if skip_none_targets and all(target is None for target in targets):
+                continue
 
             all_smiles.append(smiles)
             all_targets.append(targets)

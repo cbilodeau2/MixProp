@@ -54,7 +54,7 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
 
     # Get data
     debug('Loading data')
-    data = get_data(path=args.data_path, args=args, logger=logger)
+    data = get_data(path=args.data_path, args=args, logger=logger, skip_none_targets=True)
     validate_dataset_type(data, dataset_type=args.dataset_type)
     args.features_size = data.features_size()
     debug(f'Number of tasks = {args.num_tasks}')
@@ -74,9 +74,9 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
     # Split data
     debug(f'Splitting data with seed {args.seed}')
     if args.separate_test_path:
-        test_data = get_data(path=args.separate_test_path, args=args, features_path=args.separate_test_features_path, logger=logger)
+        test_data = get_data(path=args.separate_test_path, args=args, features_path=args.separate_test_features_path, logger=logger, skip_none_targets=True)
     if args.separate_val_path:
-        val_data = get_data(path=args.separate_val_path, args=args, features_path=args.separate_val_features_path, logger=logger)
+        val_data = get_data(path=args.separate_val_path, args=args, features_path=args.separate_val_features_path, logger=logger, skip_none_targets=True)
 
     if args.separate_val_path and args.separate_test_path:
         train_data = data
