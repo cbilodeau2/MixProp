@@ -275,7 +275,7 @@ class TrainArgs(CommonArgs):
     grad_clip: float = None
     """Maximum magnitude of gradient during training."""
     class_balance: bool = False
-    """Trains with an equal number of positives and negatives in each batch (only for single task classification)."""
+    """Trains with an equal number of positives and negatives in each batch."""
     infer_unknown_set: Literal['train', 'all'] = None
     """Which sets (train or train/val/test) should have their unknown values inferred by :code;`infer_unknown_value`."""
     infer_unknown_value: float = 0.0
