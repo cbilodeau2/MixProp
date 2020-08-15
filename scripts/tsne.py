@@ -56,7 +56,8 @@ def extend_arguments(arguments: Optional[List[str]], length: int) -> List[Option
 
 
 def compare_datasets_tsne(args: Args):
-    if len(args.smiles_paths) * (1 + (args.activity_columns is not None)) > len(args.colors):
+    num_datasets = len(args.smiles_paths) * (1 + (args.activity_columns is not None))
+    if num_datasets > len(args.colors) or num_datasets > len(args.sizes):
         raise ValueError('Must have at least as many colors and sizes as datasets (times 2 if splitting by activity)')
 
     # Extend SMILES columns and activity columns
