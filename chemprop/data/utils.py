@@ -113,8 +113,7 @@ def get_data(path: str,
              features_generator: List[str] = None,
              max_data_size: int = None,
              store_row: bool = False,
-             logger: Logger = None,
-             skip_none_targets: bool = False) -> MoleculeDataset:
+             logger: Logger = None) -> MoleculeDataset:
     """
     Gets SMILES and target values from a CSV file.
 
@@ -124,7 +123,8 @@ def get_data(path: str,
                            except the :code:`smiles_column` and the :code:`ignore_columns`.
     :param ignore_columns: Name of the columns to ignore when :code:`target_columns` is not provided.
     :param skip_invalid_smiles: Whether to skip and filter out invalid smiles using :func:`filter_invalid_smiles`.
-    :param skip_none_targets: Skips molecules with all None targets.
+    :param skip_none_targets: Whether to skip targets that are all :code:`None`. This is mostly relevant
+                              when :code:`target_columns`are passed in, so only a subset of tasks are examined.
     :param args: Arguments, either :class:`~chemprop.args.TrainArgs` or :class:`~chemprop.args.PredictArgs`.
     :param features_path: A list of paths to files containing features. If provided, it is used
                           in place of :code:`args.features_path`.
@@ -133,8 +133,6 @@ def get_data(path: str,
     :param max_data_size: The maximum number of data points to load.
     :param logger: A logger for recording output.
     :param store_row: Whether to store the raw CSV row in each :class:`~chemprop.data.data.MoleculeDatapoint`.
-    :param skip_none_targets: Whether to skip targets that are all 'None'. This is mostly relevant when --target_columns
-                              are passed in, so only a subset of tasks are examined.
     :return: A :class:`~chemprop.data.MoleculeDataset` containing SMILES and target values along
              with other info such as additional features when desired.
     """
