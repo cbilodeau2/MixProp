@@ -1,0 +1,181 @@
+Fold 0
+Command line
+python hyperparameter_optimization.py --data_path data/DowData/solubility/Joback_OneMol/data.csv --dataset_type regression --save_dir checkpoints/Joback_OneMol/sol_hyperopt-1597340835 --split_type scaffold_balanced --num_iters 20 --num_folds 10 --ensemble_size 1 --save_smiles_splits --config_save_path /config.json
+Args
+{'activation': 'ReLU',
+ 'atom_messages': False,
+ 'batch_size': 50,
+ 'bias': False,
+ 'cache_cutoff': 10000,
+ 'checkpoint_dir': None,
+ 'checkpoint_path': None,
+ 'checkpoint_paths': None,
+ 'class_balance': False,
+ 'config_path': None,
+ 'config_save_path': '/config.json',
+ 'crossval_index_dir': None,
+ 'crossval_index_file': None,
+ 'crossval_index_sets': None,
+ 'cuda': True,
+ 'data_path': 'data/DowData/solubility/Joback_OneMol/data.csv',
+ 'dataset_type': 'regression',
+ 'depth': 3,
+ 'device': device(type='cuda'),
+ 'dropout': 0.4,
+ 'ensemble_size': 1,
+ 'epochs': 30,
+ 'features_generator': None,
+ 'features_only': False,
+ 'features_path': None,
+ 'features_scaling': True,
+ 'features_size': None,
+ 'ffn_hidden_size': 1300,
+ 'ffn_num_layers': 2,
+ 'final_lr': 0.0001,
+ 'folds_file': None,
+ 'gpu': None,
+ 'grad_clip': None,
+ 'hidden_size': 1300,
+ 'ignore_columns': None,
+ 'init_lr': 0.0001,
+ 'log_dir': None,
+ 'log_frequency': 10,
+ 'max_data_size': None,
+ 'max_lr': 0.001,
+ 'metric': 'rmse',
+ 'minimize_score': True,
+ 'multiclass_num_classes': 3,
+ 'no_cuda': False,
+ 'no_features_scaling': False,
+ 'num_folds': 10,
+ 'num_iters': 20,
+ 'num_lrs': 1,
+ 'num_tasks': 1,
+ 'num_workers': 8,
+ 'pytorch_seed': 0,
+ 'quiet': False,
+ 'save_dir': 'checkpoints/Joback_OneMol/sol_hyperopt-1597340835/depth_3_dropout_0.4_ffn_num_layers_2_hidden_size_1300/fold_0',
+ 'save_smiles_splits': True,
+ 'seed': 0,
+ 'separate_test_features_path': None,
+ 'separate_test_path': None,
+ 'separate_val_features_path': None,
+ 'separate_val_path': None,
+ 'show_individual_scores': False,
+ 'smiles_column': None,
+ 'split_sizes': (0.8, 0.1, 0.1),
+ 'split_type': 'scaffold_balanced',
+ 'target_columns': None,
+ 'task_names': ['Solubility'],
+ 'test': False,
+ 'test_fold_index': None,
+ 'train_data_size': None,
+ 'undirected': False,
+ 'use_input_features': False,
+ 'val_fold_index': None,
+ 'warmup_epochs': 2.0}
+Loading data
+Number of tasks = 1
+Splitting data with seed 0
+Total scaffolds = 1,588 | train scaffolds = 898 | val scaffolds = 304 | test scaffolds = 386
+Label averages per scaffold, in decreasing order of scaffold frequency,capped at 10 scaffolds and 20 labels:
+Scaffold 0
+Task 0: count = 2,267 | target average = -2.017040
+
+
+Scaffold 1
+Task 0: count = 1,632 | target average = -2.598343
+
+
+Scaffold 2
+Task 0: count = 215 | target average = -6.971653
+
+
+Scaffold 3
+Task 0: count = 141 | target average = -3.937864
+
+
+Scaffold 4
+Task 0: count = 135 | target average = -6.824769
+
+
+Scaffold 5
+Task 0: count = 110 | target average = -2.684366
+
+
+Scaffold 6
+Task 0: count = 95 | target average = -1.321900
+
+
+Scaffold 7
+Task 0: count = 73 | target average = -5.256434
+
+
+Scaffold 8
+Task 0: count = 54 | target average = -4.558373
+
+
+Scaffold 9
+Task 0: count = 52 | target average = -1.722385
+
+
+Total size = 8,400 | train size = 6,720 | val size = 840 | test size = 840
+Fitting scaler
+Building model 0
+MoleculeModel(
+  (encoder): MPN(
+    (encoder): MPNEncoder(
+      (dropout_layer): Dropout(p=0.4, inplace=False)
+      (act_func): ReLU()
+      (W_i): Linear(in_features=147, out_features=1300, bias=False)
+      (W_h): Linear(in_features=1300, out_features=1300, bias=False)
+      (W_o): Linear(in_features=1433, out_features=1300, bias=True)
+    )
+  )
+  (ffn): Sequential(
+    (0): Dropout(p=0.4, inplace=False)
+    (1): Linear(in_features=1300, out_features=1300, bias=True)
+    (2): ReLU()
+    (3): Dropout(p=0.4, inplace=False)
+    (4): Linear(in_features=1300, out_features=1, bias=True)
+  )
+)
+Number of parameters = 5,437,901
+Moving model to cuda
+Epoch 0
+Loss = 2.1517e-02, PNorm = 65.0159, GNorm = 6.4692, lr_0 = 1.3694e-04
+Loss = 1.8093e-02, PNorm = 65.0237, GNorm = 2.8890, lr_0 = 1.7052e-04
+Loss = 1.9131e-02, PNorm = 65.0343, GNorm = 3.7987, lr_0 = 2.0410e-04
+Loss = 1.6375e-02, PNorm = 65.0493, GNorm = 2.9770, lr_0 = 2.3769e-04
+Loss = 1.3926e-02, PNorm = 65.0715, GNorm = 4.4209, lr_0 = 2.7127e-04
+Loss = 1.3487e-02, PNorm = 65.0970, GNorm = 5.1433, lr_0 = 3.0485e-04
+Loss = 1.2429e-02, PNorm = 65.1231, GNorm = 2.8605, lr_0 = 3.3843e-04
+Loss = 1.2995e-02, PNorm = 65.1579, GNorm = 9.0707, lr_0 = 3.7201e-04
+Loss = 1.0887e-02, PNorm = 65.1933, GNorm = 2.4893, lr_0 = 4.0560e-04
+Loss = 9.4589e-03, PNorm = 65.2327, GNorm = 3.7036, lr_0 = 4.3918e-04
+Loss = 8.9965e-03, PNorm = 65.2739, GNorm = 3.0959, lr_0 = 4.7276e-04
+Loss = 7.9835e-03, PNorm = 65.3192, GNorm = 3.1267, lr_0 = 5.0634e-04
+Loss = 1.0403e-02, PNorm = 65.3647, GNorm = 6.4549, lr_0 = 5.3993e-04
+Validation rmse = 1.400290
+Epoch 1
+Loss = 7.6004e-03, PNorm = 65.4256, GNorm = 4.2790, lr_0 = 5.7687e-04
+Loss = 8.0466e-03, PNorm = 65.4752, GNorm = 3.2865, lr_0 = 6.1045e-04
+Loss = 9.8821e-03, PNorm = 65.5255, GNorm = 1.7859, lr_0 = 6.4403e-04
+Loss = 8.3103e-03, PNorm = 65.5836, GNorm = 4.5390, lr_0 = 6.7761e-04
+Loss = 7.6483e-03, PNorm = 65.6448, GNorm = 1.1242, lr_0 = 7.1119e-04
+Loss = 9.8367e-03, PNorm = 65.7152, GNorm = 1.4526, lr_0 = 7.4478e-04
+Loss = 7.8478e-03, PNorm = 65.7804, GNorm = 3.7795, lr_0 = 7.7836e-04
+Loss = 7.3281e-03, PNorm = 65.8398, GNorm = 3.3741, lr_0 = 8.1194e-04
+Loss = 7.5911e-03, PNorm = 65.9064, GNorm = 5.7178, lr_0 = 8.4552e-04
+Loss = 6.8506e-03, PNorm = 65.9835, GNorm = 3.1089, lr_0 = 8.7910e-04
+Loss = 7.4454e-03, PNorm = 66.0592, GNorm = 2.4639, lr_0 = 9.1269e-04
+Loss = 6.8872e-03, PNorm = 66.1458, GNorm = 1.8531, lr_0 = 9.4627e-04
+Loss = 5.8198e-03, PNorm = 66.2306, GNorm = 4.8549, lr_0 = 9.7985e-04
+Validation rmse = 1.639828
+Epoch 2
+Loss = 8.3604e-03, PNorm = 66.3132, GNorm = 1.9056, lr_0 = 9.9694e-04
+Loss = 7.1915e-03, PNorm = 66.3925, GNorm = 1.9822, lr_0 = 9.9084e-04
+Loss = 8.5155e-03, PNorm = 66.4719, GNorm = 2.8974, lr_0 = 9.8477e-04
+Loss = 6.7144e-03, PNorm = 66.5489, GNorm = 4.2417, lr_0 = 9.7875e-04
+Loss = 7.0397e-03, PNorm = 66.6217, GNorm = 3.2181, lr_0 = 9.7276e-04
+Loss = 6.4357e-03, PNorm = 66.6927, GNorm = 1.0334, lr_0 = 9.6681e-04
