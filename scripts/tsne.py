@@ -58,7 +58,6 @@ def compare_datasets_tsne(args: Args):
     # Extend SMILES columns and activity columns
     smiles_columns = extend_arguments(arguments=args.smiles_columns, length=len(args.smiles_paths))
     activity_columns = extend_arguments(arguments=args.activity_columns, length=len(args.smiles_paths))
-    sizes = extend_arguments(arguments=args.sizes, length=len(args.sizes))
 
     # Random seed for random subsampling
     np.random.seed(0)
@@ -82,6 +81,10 @@ def compare_datasets_tsne(args: Args):
         else:
             new_smiles_sets = [data[smiles_column]]
             new_labels = [label]
+            # new_labels = list(data.keys()[1:])
+            # new_smiles_sets = [data[data[target] == 1][smiles_column] for target in new_labels]
+            # new_smiles_sets.append(data[~data[new_labels].any(axis=1)][smiles_column])
+            # new_labels.append('Other')
 
         for new_smiles, label in zip(new_smiles_sets, new_labels):
             new_smiles = list(new_smiles)
@@ -96,7 +99,9 @@ def compare_datasets_tsne(args: Args):
             labels.append(label)
             smiles += new_smiles
 
-    assert len(slices) == len(labels) == len(sizes)
+    assert len(slices) == len(labels)
+
+    sizes = extend_arguments(arguments=args.sizes, length=len(slices))
 
     num_colors = len(slices)
     cmap = plt.get_cmap('rainbow')
