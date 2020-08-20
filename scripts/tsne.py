@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from matplotlib import offsetbox
 import matplotlib.patches as mpatches
@@ -34,15 +34,14 @@ class Args(Tap):
     If one is provided, uses that column for each data file.
     If more than one is provided, there must be one provided for each data file.
     """
-    colors: List[str] = ['red', 'blue', 'orange', 'green', 'purple']  # Colors of the points associated with each dataset
-    sizes: List[float] = [1, 1, 1, 1, 1]  # Sizes of the points associated with each molecule
+    sizes: List[float] = [1]  # Sizes of the points associated with each molecule
     scale: int = 1  # Scale of figure
     plot_molecules: bool = False  # Whether to plot images of molecules instead of points
     max_per_dataset: int = 10000  # Maximum number of molecules per dataset; larger datasets will be subsampled to this size
     save_path: str  # Path to a .png file where the t-SNE plot will be saved
 
 
-def extend_arguments(arguments: Optional[List[str]], length: int) -> List[Optional[str]]:
+def extend_arguments(arguments: Optional[List[Any]], length: int) -> List[Optional[Any]]:
     """Extends arguments to the provided length."""
     if arguments is None:
         return [None] * length
@@ -56,13 +55,10 @@ def extend_arguments(arguments: Optional[List[str]], length: int) -> List[Option
 
 
 def compare_datasets_tsne(args: Args):
-    num_datasets = len(args.smiles_paths) * (1 + (args.activity_columns is not None))
-    if num_datasets > len(args.colors) or num_datasets > len(args.sizes):
-        raise ValueError('Must have at least as many colors and sizes as datasets (times 2 if splitting by activity)')
-
     # Extend SMILES columns and activity columns
     smiles_columns = extend_arguments(arguments=args.smiles_columns, length=len(args.smiles_paths))
     activity_columns = extend_arguments(arguments=args.activity_columns, length=len(args.smiles_paths))
+    sizes = extend_arguments(arguments=args.sizes, length=len(args.sizes))
 
     # Random seed for random subsampling
     np.random.seed(0)
@@ -100,6 +96,12 @@ def compare_datasets_tsne(args: Args):
             labels.append(label)
             smiles += new_smiles
 
+    assert len(slices) == len(labels) == len(sizes)
+
+    num_colors = len(slices)
+    cmap = plt.get_cmap('rainbow')
+    colors = [cmap(i / (num_colors - 1)) for i in range(num_colors)]
+
     # Compute Morgan fingerprints
     print('Computing Morgan fingerprints')
     morgan_generator = get_features_generator('morgan')
@@ -125,7 +127,7 @@ def compare_datasets_tsne(args: Args):
     handles = []
     legend_kwargs = dict(loc='upper right', fontsize=fontsize)
 
-    for slc, color, label, size in zip(slices, args.colors, labels, args.sizes):
+    for slc, color, label, size in zip(slices, colors, labels, sizes):
         if args.plot_molecules:
             # Plots molecules
             handles.append(mpatches.Patch(color=color, label=label))
