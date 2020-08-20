@@ -181,8 +181,8 @@ def get_data(path: str,
             ignore_columns = set([smiles_column] + ([] if ignore_columns is None else ignore_columns))
             target_columns = [column for column in columns if column not in ignore_columns]
 
-        all_smiles, all_targets, all_rows, all_lineages = [], [], [], []
-        for row in tqdm(reader):
+        all_smiles, all_targets, all_rows, all_features, all_lineages = [], [], [], [], []
+        for i, row in tqdm(enumerate(reader)):
             smiles = row[smiles_column]
 
             if smiles in skip_smiles:
@@ -200,6 +200,9 @@ def get_data(path: str,
             if use_taxon:
                 all_lineages.append(ncbi.get_lineage(row[args.taxon_column]))
 
+            if features_data is not None:
+                all_features.append(features_data[i])
+
             if store_row:
                 all_rows.append(row)
 
@@ -213,7 +216,7 @@ def get_data(path: str,
                 raw_lineage=all_lineages[i] if use_taxon else None,
                 row=all_rows[i] if store_row else None,
                 features_generator=features_generator,
-                features=features_data[i] if features_data is not None else None
+                features=all_features[i] if features_data is not None else None
             ) for i, (smiles, targets) in tqdm(enumerate(zip(all_smiles, all_targets)),
                                                total=len(all_smiles))
         ])
