@@ -76,7 +76,10 @@ class MPNEncoder(nn.Module):
             features_batch = torch.from_numpy(np.stack(features_batch)).float().to(self.device)
 
             if self.features_only:
-                return torch.cat([features_batch, lineage_batch], dim=1)
+                if lineage_batch is not None:
+                    return torch.cat([features_batch, lineage_batch], dim=1)
+
+                return features_batch
 
         f_atoms, f_bonds, a2b, b2a, b2revb, a_scope, b_scope = mol_graph.get_components(atom_messages=self.atom_messages)
         f_atoms, f_bonds, a2b, b2a, b2revb = f_atoms.to(self.device), f_bonds.to(self.device), a2b.to(self.device), b2a.to(self.device), b2revb.to(self.device)
@@ -138,7 +141,11 @@ class MPNEncoder(nn.Module):
             features_batch = features_batch.to(mol_vecs)
             if len(features_batch.shape) == 1:
                 features_batch = features_batch.view([1, features_batch.shape[0]])
-            mol_vecs = torch.cat([mol_vecs, features_batch, lineage_batch], dim=1)  # (num_molecules, hidden_size)
+
+            if lineage_batch is not None:
+                mol_vecs = torch.cat([mol_vecs, features_batch, lineage_batch], dim=1)  # (num_molecules, hidden_size)
+            else:
+                mol_vecs = torch.cat([mol_vecs, features_batch], dim=1)  # (num_molecules, hidden_size)
         elif lineage_batch is not None:
             mol_vecs = torch.cat([mol_vecs, lineage_batch], dim=1)  # (num_molecules, hidden_size)
 
