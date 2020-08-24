@@ -81,7 +81,7 @@ def cross_validate(args: TrainArgs) -> Tuple[float, float]:
             writer.writerow([task_name, mean, std] + task_scores.tolist())
 
     # Merge and save test preds if doing cross-validation
-    if args.split_type == 'cv':
+    if args.save_preds:
         all_preds = pd.concat([pd.read_csv(os.path.join(save_dir, f'fold_{fold_num}', 'test_preds.csv'))
                                for fold_num in range(args.num_folds)])
         all_preds.to_csv(os.path.join(save_dir, 'test_preds.csv'), index=False)

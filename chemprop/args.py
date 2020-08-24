@@ -200,6 +200,8 @@ class TrainArgs(CommonArgs):
     """Path where NCBI taxonomy sqlite file should loaded from."""
     ncbi_taxdump_file: str = None
     """Path where NCIB taxonomy :code:`taxdump.tar.gz` file should be loaded from."""
+    save_preds: bool = False
+    """Whether to save test split predictions during training."""
 
     # Model arguments
     bias: bool = False

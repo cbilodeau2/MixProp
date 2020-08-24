@@ -328,7 +328,7 @@ def run_training(args: TrainArgs, logger: Logger = None) -> List[float]:
             info(f'Ensemble test {task_name} {args.metric} = {ensemble_score:.6f}')
 
     # Save test preds if doing cross-validation
-    if args.split_type == 'cv':
+    if args.save_preds:
         test_preds_dataframe = pd.DataFrame(data={'smiles': test_data.smiles()})
 
         for i, task_name in enumerate(args.task_names):
