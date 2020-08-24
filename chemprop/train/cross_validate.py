@@ -80,7 +80,7 @@ def cross_validate(args: TrainArgs) -> Tuple[float, float]:
             mean, std = np.nanmean(task_scores), np.nanstd(task_scores)
             writer.writerow([task_name, mean, std] + task_scores.tolist())
 
-    # Merge and save test preds if doing cross-validation
+    # Optionally merge and save test preds
     if args.save_preds:
         all_preds = pd.concat([pd.read_csv(os.path.join(save_dir, f'fold_{fold_num}', 'test_preds.csv'))
                                for fold_num in range(args.num_folds)])
