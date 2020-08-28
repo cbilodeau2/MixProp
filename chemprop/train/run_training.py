@@ -38,6 +38,9 @@ def run_training(args: TrainArgs,
     else:
         debug = info = print
 
+    # Set pytorch seed for random initial weights
+    torch.manual_seed(args.pytorch_seed)
+
     # Split data
     debug(f'Splitting data with seed {args.seed}')
     if args.separate_test_path:
