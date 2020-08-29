@@ -146,7 +146,7 @@ def get_data(path: str,
         features_path = features_path if features_path is not None else args.features_path
         features_generator = features_generator if features_generator is not None else args.features_generator
         max_data_size = max_data_size if max_data_size is not None else args.max_data_size
-        use_taxon = args.use_taxon
+        use_taxon = getattr(args, 'use_taxon', False)
     else:
         use_taxon = False
 
