@@ -5,8 +5,9 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 from tensorboardX import SummaryWriter
-from tqdm import trange
+import torch
 from torch.optim.lr_scheduler import ExponentialLR
+from tqdm import trange
 
 from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
