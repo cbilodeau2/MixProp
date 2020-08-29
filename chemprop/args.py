@@ -186,6 +186,11 @@ class TrainArgs(CommonArgs):
     """
     extra_metrics: List[Metric] = []
     """Additional metrics to use to evaluate the model. Not used for early stopping."""
+    metric_by_row: bool = False
+    """
+    Whether to evalute the metric row-wise rather than column-wise
+    (i.e., average across molecules rather than across tasks).
+    """
     save_dir: str = None
     """Directory where model checkpoints will be saved."""
     save_smiles_splits: bool = False

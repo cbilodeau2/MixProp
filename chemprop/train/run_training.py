@@ -222,6 +222,7 @@ def run_training(args: TrainArgs,
                 num_tasks=args.num_tasks,
                 metrics=args.metrics,
                 dataset_type=args.dataset_type,
+                metric_by_row=args.metric_by_row,
                 scaler=scaler,
                 logger=logger
             )
@@ -246,7 +247,8 @@ def run_training(args: TrainArgs,
                 save_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), model, scaler, features_scaler, args)
 
         # Evaluate on test set using model with best validation score
-        info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
+        info(f'Model {model_idx} best validation {args.metric} {"by row" if args.metric_by_row else ""} '
+             f'= {best_score:.6f} on epoch {best_epoch}')
         model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger)
 
         test_preds = predict(
@@ -260,6 +262,7 @@ def run_training(args: TrainArgs,
             num_tasks=args.num_tasks,
             metrics=args.metrics,
             dataset_type=args.dataset_type,
+            metric_by_row=args.metric_by_row,
             logger=logger
         )
 
@@ -269,7 +272,7 @@ def run_training(args: TrainArgs,
         # Average test score
         for metric in args.metrics:
             avg_test_score = np.nanmean(test_scores[metric])
-            info(f'Model {model_idx} test {metric} = {avg_test_score:.6f}')
+            info(f'Model {model_idx} test {metric}  {"by row" if args.metric_by_row else ""} = {avg_test_score:.6f}')
             writer.add_scalar(f'test_{metric}', avg_test_score, 0)
 
             if args.show_individual_scores:
@@ -288,6 +291,7 @@ def run_training(args: TrainArgs,
         num_tasks=args.num_tasks,
         metrics=args.metrics,
         dataset_type=args.dataset_type,
+        metric_by_row=args.metric_by_row,
         logger=logger
     )
 

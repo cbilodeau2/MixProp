@@ -102,6 +102,7 @@ def single_task_sklearn(model: Union[RandomForestRegressor, RandomForestClassifi
             num_tasks=1,
             metrics=metrics,
             dataset_type=args.dataset_type,
+            metric_by_row=args.metric_by_row,
             logger=logger
         )
         scores.append(score[0])
@@ -155,6 +156,7 @@ def multi_task_sklearn(model: Union[RandomForestRegressor, RandomForestClassifie
         num_tasks=num_tasks,
         metrics=metrics,
         dataset_type=args.dataset_type,
+        metric_by_row=args.metric_by_row,
         logger=logger
     )
 

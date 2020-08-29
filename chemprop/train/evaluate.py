@@ -1,6 +1,8 @@
 from collections import defaultdict
 import logging
-from typing import Callable, Dict, List
+from typing import Dict, List
+
+import numpy as np
 
 from .predict import predict
 from chemprop.data import MoleculeDataLoader, StandardScaler
@@ -13,6 +15,7 @@ def evaluate_predictions(preds: List[List[float]],
                          num_tasks: int,
                          metrics: List[str],
                          dataset_type: str,
+                         metric_by_row: bool = False,
                          logger: logging.Logger = None) -> Dict[str, List[float]]:
     """
     Evaluates predictions using a metric function after filtering out invalid targets.
@@ -22,6 +25,7 @@ def evaluate_predictions(preds: List[List[float]],
     :param num_tasks: Number of tasks.
     :param metrics: A list of names of metric functions.
     :param dataset_type: Dataset type.
+    :param metric_by_row: Whether to apply the metric to each row (and then average) rather than to each column.
     :param logger: A logger to record output.
     :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
     """
@@ -32,28 +36,33 @@ def evaluate_predictions(preds: List[List[float]],
     if len(preds) == 0:
         return {metric: [float('nan')] * num_tasks for metric in metrics}
 
+    num_values = len(preds) if metric_by_row else num_tasks
+
     # Filter out empty targets
-    # valid_preds and valid_targets have shape (num_tasks, data_size)
-    valid_preds = [[] for _ in range(num_tasks)]
-    valid_targets = [[] for _ in range(num_tasks)]
+    # valid_preds and valid_targets have shape (num_values, data_size)
+    valid_preds = [[] for _ in range(num_values)]
+    valid_targets = [[] for _ in range(num_values)]
     for i in range(num_tasks):
         for j in range(len(preds)):
             if targets[j][i] is not None:  # Skip those without targets
-                valid_preds[i].append(preds[j][i])
-                valid_targets[i].append(targets[j][i])
+                index = j if metric_by_row else i
+                valid_preds[index].append(preds[j][i])
+                valid_targets[index].append(targets[j][i])
 
     # Compute metric
     results = defaultdict(list)
-    for i in range(num_tasks):
+    for i in range(num_values):
         # # Skip if all targets or preds are identical, otherwise we'll crash during classification
         if dataset_type == 'classification':
             nan = False
             if all(target == 0 for target in valid_targets[i]) or all(target == 1 for target in valid_targets[i]):
                 nan = True
-                info('Warning: Found a task with targets all 0s or all 1s')
+                if not metric_by_row:
+                    info('Warning: Found a task with targets all 0s or all 1s')
             if all(pred == 0 for pred in valid_preds[i]) or all(pred == 1 for pred in valid_preds[i]):
                 nan = True
-                info('Warning: Found a task with predictions all 0s or all 1s')
+                if not metric_by_row:
+                    info('Warning: Found a task with predictions all 0s or all 1s')
 
             if nan:
                 for metric in metrics:
@@ -72,6 +81,11 @@ def evaluate_predictions(preds: List[List[float]],
 
     results = dict(results)
 
+    # Average metric across molecules
+    if metric_by_row:
+        for metric, values in results.items():
+            results[metric] = [np.nanmean(values)]
+
     return results
 
 
@@ -80,6 +94,7 @@ def evaluate(model: MoleculeModel,
              num_tasks: int,
              metrics: List[str],
              dataset_type: str,
+             metric_by_row: bool = False,
              scaler: StandardScaler = None,
              logger: logging.Logger = None) -> Dict[str, List[float]]:
     """
@@ -91,6 +106,7 @@ def evaluate(model: MoleculeModel,
     :param metrics: A list of names of metric functions.
     :param dataset_type: Dataset type.
     :param scaler: A :class:`~chemprop.features.scaler.StandardScaler` object fit on the training targets.
+    :param metric_by_row: Whether to apply the metric to each row (and then average) rather than to each column.
     :param logger: A logger to record output.
     :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
 
@@ -107,6 +123,7 @@ def evaluate(model: MoleculeModel,
         num_tasks=num_tasks,
         metrics=metrics,
         dataset_type=dataset_type,
+        metric_by_row=metric_by_row,
         logger=logger
     )
 
