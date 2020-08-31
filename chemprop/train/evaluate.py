@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from .predict import predict
+from chemprop.constants import BY_ROW
 from chemprop.data import MoleculeDataLoader, StandardScaler
 from chemprop.models import MoleculeModel
 from chemprop.utils import get_metric_func
@@ -63,7 +64,7 @@ def _evaluate_predictions(preds: List[List[float]],
 
     info = logger.info if logger is not None else print
 
-    metric_to_func = {f'{metric}{"-by-row" if metric_by_row else ""}': get_metric_func(metric) for metric in metrics}
+    metric_to_func = {f'{metric}{BY_ROW if metric_by_row else ""}': get_metric_func(metric) for metric in metrics}
 
     # Filter out empty targets
     valid_preds, valid_targets = select_valid_values(
@@ -75,7 +76,7 @@ def _evaluate_predictions(preds: List[List[float]],
 
     # Compute metric
     results = defaultdict(list)
-    for i in range(len(preds)):
+    for i in range(len(valid_preds)):
         # # Skip if all targets or preds are identical, otherwise we'll crash during classification
         if dataset_type == 'classification':
             nan = False

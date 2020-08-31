@@ -8,6 +8,7 @@ from typing_extensions import Literal
 import torch
 from tap import Tap  # pip install typed-argument-parser (https://github.com/swansonk14/typed-argument-parser)
 
+from chemprop.constants import BY_ROW
 from chemprop.dag import RootedDAG
 from chemprop.features import get_available_features_generators
 
@@ -308,8 +309,13 @@ class TrainArgs(CommonArgs):
         self._go_dag = None
 
     @property
+    def validation_metric(self):
+        """The metric to use for early stopping on the validation set."""
+        return f'{self.metric}{BY_ROW if self.metric_by_row else ""}'
+
+    @property
     def metrics(self) -> List[str]:
-        """The list of metrics used for evaluation. Only the first is used for early stopping."""
+        """The list of metrics used for evaluation."""
         return [self.metric] + self.extra_metrics
 
     @property

@@ -11,7 +11,7 @@ import pandas as pd
 
 from .run_training import run_training
 from chemprop.args import TrainArgs
-from chemprop.constants import TEST_SCORES_FILE_NAME, TRAIN_LOGGER_NAME
+from chemprop.constants import BY_ROW, TEST_SCORES_FILE_NAME, TRAIN_LOGGER_NAME
 from chemprop.data import get_data, get_task_names, MoleculeDataset, validate_dataset_type
 from chemprop.go_utils import load_go_dag
 from chemprop.utils import create_logger, makedirs, timeit
@@ -102,7 +102,7 @@ def cross_validate(args: TrainArgs,
         for metric, scores in all_scores.items():
             info(f'\tSeed {init_seed + fold_num} ==> test {metric} = {np.nanmean(scores[fold_num]):.6f}')
 
-            if args.show_individual_scores:
+            if args.show_individual_scores and BY_ROW not in metric:
                 for task_name, score in zip(args.task_names, scores[fold_num]):
                     info(f'\t\tSeed {init_seed + fold_num} ==> test {task_name} {metric} = {score:.6f}')
 
@@ -112,7 +112,7 @@ def cross_validate(args: TrainArgs,
         mean_score, std_score = np.nanmean(avg_scores), np.nanstd(avg_scores)
         info(f'Overall test {metric} = {mean_score:.6f} +/- {std_score:.6f}')
 
-        if args.show_individual_scores:
+        if args.show_individual_scores and BY_ROW not in metric:
             for task_num, task_name in enumerate(args.task_names):
                 info(f'\tOverall test {task_name} {metric} = '
                      f'{np.nanmean(scores[:, task_num]):.6f} +/- {np.nanstd(scores[:, task_num]):.6f}')
@@ -130,6 +130,9 @@ def cross_validate(args: TrainArgs,
         for task_num, task_name in enumerate(args.task_names):
             row = [task_name]
             for metric, scores in all_scores.items():
+                if BY_ROW in metric:
+                    continue
+
                 task_scores = scores[:, task_num]
                 mean, std = np.nanmean(task_scores), np.nanstd(task_scores)
                 row += [mean, std] + task_scores.tolist()
