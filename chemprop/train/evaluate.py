@@ -1,6 +1,6 @@
 from collections import defaultdict
 import logging
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -10,32 +10,19 @@ from chemprop.models import MoleculeModel
 from chemprop.utils import get_metric_func
 
 
-def evaluate_predictions(preds: List[List[float]],
-                         targets: List[List[float]],
-                         num_tasks: int,
-                         metrics: List[str],
-                         dataset_type: str,
-                         metric_by_row: bool = False,
-                         logger: logging.Logger = None) -> Dict[str, List[float]]:
+def select_valid_values(preds: List[List[float]],
+                        targets: List[List[float]],
+                        num_tasks: int,
+                        metric_by_row: bool = False) -> Tuple[List[List[float]], List[List[float]]]:
     """
-    Evaluates predictions using a metric function after filtering out invalid targets.
+    Selects valid preds and targets corresponding to those where the target is not None.
 
     :param preds: A list of lists of shape :code:`(data_size, num_tasks)` with model predictions.
     :param targets: A list of lists of shape :code:`(data_size, num_tasks)` with targets.
     :param num_tasks: Number of tasks.
-    :param metrics: A list of names of metric functions.
-    :param dataset_type: Dataset type.
     :param metric_by_row: Whether to apply the metric to each row (and then average) rather than to each column.
-    :param logger: A logger to record output.
-    :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
+    :return: A tuple of preds and targets with None entries removed.
     """
-    info = logger.info if logger is not None else print
-
-    metric_to_func = {metric: get_metric_func(metric) for metric in metrics}
-
-    if len(preds) == 0:
-        return {metric: [float('nan')] * num_tasks for metric in metrics}
-
     num_values = len(preds) if metric_by_row else num_tasks
 
     # Filter out empty targets
@@ -49,9 +36,46 @@ def evaluate_predictions(preds: List[List[float]],
                 valid_preds[index].append(preds[j][i])
                 valid_targets[index].append(targets[j][i])
 
+    return valid_preds, valid_targets
+
+
+def _evaluate_predictions(preds: List[List[float]],
+                          targets: List[List[float]],
+                          num_tasks: int,
+                          metrics: List[str],
+                          dataset_type: str,
+                          metric_by_row: bool = False,
+                          logger: logging.Logger = None) -> Dict[str, List[float]]:
+    """
+    Evaluates predictions using a metric function after filtering out invalid targets.
+
+    :param preds: A list of lists of shape :code:`(data_size, num_tasks)` with model predictions.
+    :param targets: A list of lists of shape :code:`(data_size, num_tasks)` with targets.
+    :param num_tasks: Number of tasks.
+    :param metrics: A list of names of metric functions.
+    :param dataset_type: Dataset type.
+    :param metric_by_row: Whether to apply the metric to each row (and then average) rather than to each column.
+    :param logger: A logger to record output.
+    :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
+    """
+    if len(preds) == 0:
+        return {metric: [float('nan')] * num_tasks for metric in metrics}
+
+    info = logger.info if logger is not None else print
+
+    metric_to_func = {f'{metric}{"-by-row" if metric_by_row else ""}': get_metric_func(metric) for metric in metrics}
+
+    # Filter out empty targets
+    valid_preds, valid_targets = select_valid_values(
+        preds=preds,
+        targets=targets,
+        num_tasks=num_tasks,
+        metric_by_row=metric_by_row
+    )
+
     # Compute metric
     results = defaultdict(list)
-    for i in range(num_values):
+    for i in range(len(preds)):
         # # Skip if all targets or preds are identical, otherwise we'll crash during classification
         if dataset_type == 'classification':
             nan = False
@@ -65,7 +89,7 @@ def evaluate_predictions(preds: List[List[float]],
                     info('Warning: Found a task with predictions all 0s or all 1s')
 
             if nan:
-                for metric in metrics:
+                for metric in metric_to_func:
                     results[metric].append(float('nan'))
                 continue
 
@@ -85,6 +109,49 @@ def evaluate_predictions(preds: List[List[float]],
     if metric_by_row:
         for metric, values in results.items():
             results[metric] = [np.nanmean(values)]
+
+    return results
+
+
+def evaluate_predictions(preds: List[List[float]],
+                         targets: List[List[float]],
+                         num_tasks: int,
+                         metrics: List[str],
+                         dataset_type: str,
+                         metric_by_row: bool = False,
+                         logger: logging.Logger = None) -> Dict[str, List[float]]:
+    """
+    Wrapper around :func:`_evaluate_predictions` which valuates predictions using a metric function after filtering out invalid targets.
+
+    :param preds: A list of lists of shape :code:`(data_size, num_tasks)` with model predictions.
+    :param targets: A list of lists of shape :code:`(data_size, num_tasks)` with targets.
+    :param num_tasks: Number of tasks.
+    :param metrics: A list of names of metric functions.
+    :param dataset_type: Dataset type.
+    :param metric_by_row: Whether to apply the metric to each row (and then average) rather than to each column.
+    :param logger: A logger to record output.
+    :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
+    """
+    results = _evaluate_predictions(
+        preds=preds,
+        targets=targets,
+        num_tasks=num_tasks,
+        metrics=metrics,
+        dataset_type=dataset_type,
+        metric_by_row=False,
+        logger=logger
+    )
+
+    if metric_by_row:
+        results.update(_evaluate_predictions(
+            preds=preds,
+            targets=targets,
+            num_tasks=num_tasks,
+            metrics=metrics,
+            dataset_type=dataset_type,
+            metric_by_row=True,
+            logger=logger
+        ))
 
     return results
 
