@@ -175,6 +175,8 @@ def get_loss_func(args: TrainArgs) -> nn.Module:
     :return: A PyTorch loss function.
     """
     if args.dataset_type == 'classification':
+        if args.multilabel:
+            return nn.MultiLabelMarginLoss(reduction='none')
         return nn.BCEWithLogitsLoss(reduction='none')
 
     if args.dataset_type == 'regression':

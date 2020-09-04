@@ -151,6 +151,8 @@ class TrainArgs(CommonArgs):
     """
     dataset_type: Literal['regression', 'classification', 'multiclass']
     """Type of dataset. This determines the loss function used during training."""
+    multilabel: bool = False
+    """If :code:`dataset_type='classification'`, whether to use a multi-label loss function instead of BCE."""
     multiclass_num_classes: int = 3
     """Number of classes when running multiclass classification."""
     separate_val_path: str = None
@@ -412,6 +414,9 @@ class TrainArgs(CommonArgs):
         # Fix ensemble size if loading checkpoints
         if self.checkpoint_paths is not None and len(self.checkpoint_paths) > 0:
             self.ensemble_size = len(self.checkpoint_paths)
+
+        if self.multilabel and not self.dataset_type == 'classification':
+            raise ValueError('Must use classification dataset type when using multi-label.')
 
         # Process and validate metric and loss function
         if self.metric is None:

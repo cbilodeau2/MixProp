@@ -58,11 +58,26 @@ def train(model: MoleculeModel,
         targets = targets.to(preds.device)
         class_weights = torch.ones(targets.shape, device=preds.device)
 
+        # Compute loss
         if args.dataset_type == 'multiclass':
             targets = targets.long()
             loss = torch.cat([loss_func(preds[:, target_index, :], targets[:, target_index]).unsqueeze(1) for target_index in range(preds.size(1))], dim=1) * class_weights * mask
+        elif args.multilabel:
+            # Set preds with None targets to -inf to force loss for those terms to 0
+            preds = preds - torch.where(mask.byte(), torch.zeros_like(mask), float('inf') * torch.ones_like(mask))
+
+            # Construct multi-label targets in correct format
+            multilabel_targets = (-1 * torch.ones_like(preds)).long()
+            for i, target in enumerate(targets):
+                active_targets = torch.nonzero(target, as_tuple=True)[0]
+                multilabel_targets[i, :active_targets.size(0)] = active_targets
+
+            # Compute loss and undo internal averaging due to masking
+            loss = loss_func(preds, multilabel_targets) * mask.sum(dim=1)
         else:
             loss = loss_func(preds, targets) * class_weights * mask
+
+        # Average loss
         loss = loss.sum() / mask.sum()
 
         loss_sum += loss.item()
