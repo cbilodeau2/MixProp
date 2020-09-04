@@ -62,6 +62,9 @@ class MoleculeDatapoint:
             replace_token = 0
             self.features = np.where(np.isnan(self.features), replace_token, self.features)
 
+        # Save a copy of the raw features and targets to enable different scaling later on
+        self.raw_features, self.raw_targets = features, targets
+
     @property
     def mol(self) -> Chem.Mol:
         """Gets the corresponding RDKit molecule for this molecule's SMILES (with lazy loading)."""
@@ -117,6 +120,10 @@ class MoleculeDatapoint:
         :param taxon_to_index: A dictionary mapping raw taxonomy IDs to embedding indices.
         """
         self.lineage = [taxon_to_index[taxon] for taxon in self.raw_lineage]
+
+    def reset_features_and_targets(self) -> None:
+        """Resets the features and targets to their raw values."""
+        self.features, self.targets = self.raw_features, self.raw_targets
 
 
 class MoleculeDataset(Dataset):
@@ -211,16 +218,6 @@ class MoleculeDataset(Dataset):
         """
         return len(self._data[0].features) if len(self._data) > 0 and self._data[0].features is not None else None
 
-    def shuffle(self, seed: int = None) -> None:
-        """
-        Shuffles the dataset.
-
-        :param seed: Optional random seed.
-        """
-        if seed is not None:
-            self._random.seed(seed)
-        self._random.shuffle(self._data)
-    
     def normalize_features(self, scaler: StandardScaler = None, replace_nan_token: int = 0) -> StandardScaler:
         """
         Normalizes the features of the dataset using a :class:`~chemprop.data.StandardScaler`.
@@ -247,15 +244,33 @@ class MoleculeDataset(Dataset):
             self._scaler = scaler
 
         elif self._scaler is None:
-            features = np.vstack([d.features for d in self._data])
+            features = np.vstack([d.raw_features for d in self._data])
             self._scaler = StandardScaler(replace_nan_token=replace_nan_token)
             self._scaler.fit(features)
 
         for d in self._data:
-            d.set_features(self._scaler.transform(d.features.reshape(1, -1))[0])
+            d.set_features(self._scaler.transform(d.raw_features.reshape(1, -1))[0])
 
         return self._scaler
-    
+
+    def normalize_targets(self) -> StandardScaler:
+        """
+        Normalizes the targets of the dataset using a :class:`~chemprop.data.StandardScaler`.
+
+        The :class:`~chemprop.data.StandardScaler` subtracts the mean and divides by the standard deviation
+        for each task independently.
+
+        This should only be used for regression datasets.
+
+        :return: A :class:`~chemprop.data.StandardScaler` fitted to the targets.
+        """
+        targets = [d.raw_targets for d in self._data]
+        scaler = StandardScaler().fit(targets)
+        scaled_targets = scaler.transform(targets).tolist()
+        self.set_targets(scaled_targets)
+
+        return scaler
+
     def set_targets(self, targets: List[List[Optional[float]]]) -> None:
         """
         Sets the targets for each molecule in the dataset. Assumes the targets are aligned with the datapoints.
@@ -305,13 +320,10 @@ class MoleculeDataset(Dataset):
         for d in self._data:
             d.set_lineage(taxon_to_index)
 
-    def sort(self, key: Callable) -> None:
-        """
-        Sorts the dataset using the provided key.
-
-        :param key: A function on a :class:`MoleculeDatapoint` to determine the sorting order.
-        """
-        self._data.sort(key=key)
+    def reset_features_and_targets(self) -> None:
+        """Resets the features and targets to their raw values."""
+        for d in self._data:
+            d.reset_features_and_targets()
 
     def __len__(self) -> int:
         """
