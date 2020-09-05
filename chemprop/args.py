@@ -150,9 +150,9 @@ class TrainArgs(CommonArgs):
     Name of the column from which to extract the taxonomy ID.
     If provided, includes a taxon embedding in the model as determined by :code:`taxon_embedding_type`.
     """
-    taxon_to_tasks_path: str = None
+    task_to_taxon_path: str = None
     """
-    Path to JSON file containing mapping from taxonomy ID to a list of task names.
+    Path to JSON file containing mapping from task name to taxonomy ID.
     This is an alternative to using :code:`taxon_column` for when species information
     is known based on the task.
     """
@@ -384,7 +384,7 @@ class TrainArgs(CommonArgs):
     @property
     def use_taxon(self) -> bool:
         """Whether to use the taxonomy as part of the model by providing a taxonomy embedding."""
-        return self.taxon_column is not None or self.taxon_to_tasks_path is not None
+        return self.taxon_column is not None or self.task_to_taxon_path is not None
 
     @property
     def num_taxons(self) -> int:
@@ -482,7 +482,7 @@ class TrainArgs(CommonArgs):
         if self.calibrate and self.dataset_type != 'classification':
             raise ValueError('Can only perform calibration on classification datasets.')
 
-        if self.taxon_column is not None and self.taxon_to_tasks_path is not None:
+        if self.taxon_column is not None and self.task_to_taxon_path is not None:
             raise ValueError('Cannot specify both taxon_column and task_to_taxon_path. Only use one.')
 
         # Test settings

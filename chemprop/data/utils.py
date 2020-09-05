@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import csv
+import json
 from logging import Logger
 import pickle
 from random import Random
@@ -404,6 +405,47 @@ def split_data(data: MoleculeDataset,
         raise ValueError(f'split_type "{split_type}" not supported.')
 
 
+def group_by_taxon(datasets: List[MoleculeDataset], args: TrainArgs) -> List[MoleculeDataset]:
+    r"""
+    Loads the task to taxon mapping and then runs :func:`group_data_by_taxon` on each dataset.
+
+    :param datasets: A list of :class:`~chemprop.data.MoleculeDataset`\ s.
+    :param args: A :class:`~chemprop.args.TrainArgs` object.
+    :return: A list of :class:`~chemprop.data.MoleculeDataset`\ s where each :class:`~chemprop.data.MoleculeDataset`
+             has been grouped by taxon
+    """
+    with open(args.task_to_taxon_path) as f:
+        task_to_taxon: Dict[str, str] = json.load(f)
+
+    task_names = set(args.task_names)
+    task_to_taxon = {task: taxon for task, taxon in task_to_taxon.items() if task in task_names}
+
+    if set(task_to_taxon) != task_names:
+        raise ValueError('Task to taxon mapping does not have the same tasks as the current data.')
+
+    taxon_to_tasks = {}
+    for taxon, task in task_to_taxon.items():
+        taxon_to_tasks.setdefault(taxon, []).append(task)
+
+    taxon_to_target_indices = {
+        int(taxon): {args.task_names.index(task) for task in tasks}
+        for taxon, tasks in taxon_to_tasks.items()
+    }
+    ncbi = NCBITaxa(args.ncbi_dbfile, args.ncbi_taxdump_file)
+    taxon_to_lineage = {taxon: ncbi.get_lineage(taxon) for taxon in taxon_to_target_indices}
+
+    datasets = [
+        group_data_by_taxon(
+            data=dataset,
+            taxon_to_target_indices=taxon_to_target_indices,
+            taxon_to_lineage=taxon_to_lineage
+        )
+        for dataset in datasets
+    ]
+
+    return datasets
+
+
 def group_data_by_taxon(data: MoleculeDataset,
                         taxon_to_target_indices: Dict[int, Set[int]],
                         taxon_to_lineage: Dict[int, List[int]]) -> MoleculeDataset:
@@ -423,7 +465,7 @@ def group_data_by_taxon(data: MoleculeDataset,
     :param taxon_to_target_indices: A dictionary mapping taxonomy ID to a set of target indices.
     :param taxon_to_lineage: A dictionary mapping taxonomy ID to a list of lineage taxonomy IDs.
     :return: A new :class:`~chemprop.data.MoleculeDataset` where each :class:`~chemprop.data.MoleculeDatapoint`
-    has been split into multiple :class:`~chemprop.data.MoleculeDatapoint`\ s by taxonomy ID.
+             has been split into multiple :class:`~chemprop.data.MoleculeDatapoint`\ s by taxonomy ID.
     """
     new_data = []
 
