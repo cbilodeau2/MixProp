@@ -283,6 +283,12 @@ class TrainArgs(CommonArgs):
     """
     calibrate: bool = False
     """Whether to calibration classification model predictions."""
+    simple_baseline: bool = False
+    """
+    Whether to use a simple baseline in place of the Chemprop model.
+    For regression, predicts the mean value for each task.
+    For classification, predicts the proportion of actives for each task.
+    """
 
     # Training arguments
     epochs: int = 30
@@ -483,6 +489,9 @@ class TrainArgs(CommonArgs):
 
         if self.taxon_column is not None and self.task_to_taxon_path is not None:
             raise ValueError('Cannot specify both taxon_column and task_to_taxon_path. Only use one.')
+
+        if self.simple_baseline:
+            self.epochs = 0
 
         # Test settings
         if self.test:

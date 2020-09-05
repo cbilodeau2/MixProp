@@ -16,7 +16,7 @@ from .train import train
 from chemprop.args import TrainArgs
 from chemprop.constants import BY_ROW, MODEL_FILE_NAME
 from chemprop.data import get_class_sizes, get_data, group_by_taxon, MoleculeDataLoader, MoleculeDataset, split_data
-from chemprop.models import MoleculeModel
+from chemprop.models import MoleculeModel, SimpleBaselineModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, load_checkpoint, makedirs, \
     save_checkpoint, save_smiles_splits
@@ -181,7 +181,10 @@ def run_training(args: TrainArgs,
             model = load_checkpoint(args.checkpoint_paths[model_idx], logger=logger)
         else:
             debug(f'Building model {model_idx}')
-            model = MoleculeModel(args)
+            if args.simple_baseline:
+                model = SimpleBaselineModel(dataset_type=args.dataset_type, train_data=train_data)
+            else:
+                model = MoleculeModel(args)
 
         debug(model)
         debug(f'Number of parameters = {param_count(model):,}')
@@ -259,7 +262,9 @@ def run_training(args: TrainArgs,
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.validation_metric} '
              f'= {best_score:.6f} on epoch {best_epoch}')
-        model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger)
+
+        if not args.simple_baseline:
+            model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger)
 
         test_preds = predict(
             model=model,
