@@ -70,7 +70,7 @@ def fit_temperature(model: MoleculeModel,
     :param data_loader: A :class:`~chemprop.data.data.MoleculeDataLoader`.
     :param logger: A logger for recording output.
     """
-    debug = logger.debug if logger is not None else print
+    info = logger.info if logger is not None else print
 
     model.train()
     device = model.temperatures.device
@@ -87,7 +87,7 @@ def fit_temperature(model: MoleculeModel,
 
     # Compute ECE prior to training
     ece = ece_criterion(logits, mask_bool, targets)
-    debug(f'ECE before calibration = {ece:.6f}')
+    info(f'ECE before calibration = {ece:.6f}')
 
     # Fit temperatures
     optimizer = optim.LBFGS([model.temperatures], lr=0.01, max_iter=50)
@@ -101,5 +101,5 @@ def fit_temperature(model: MoleculeModel,
     optimizer.step(evaluate)
 
     ece = ece_criterion(model.temperature_scale(logits), mask_bool, targets)
-    debug(f'Optimal temperatures = {model.temperatures}')
-    debug(f'ECE after calibration = {ece:.6f}')
+    info(f'ECE after calibration = {ece:.6f}')
+    info(f'Optimal temperatures = {model.temperatures.tolist()}')
