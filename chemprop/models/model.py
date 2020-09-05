@@ -56,7 +56,7 @@ class MoleculeModel(nn.Module):
         self.multiclass = args.dataset_type == 'multiclass'
         self.featurizer = featurizer
         self.device = args.device
-        self.organism_and_go = args.organism_and_go
+        self.num_secondary_tasks = args.num_secondary_tasks
         self.output_size = args.num_tasks
         self.calibrate = args.calibrate
 
@@ -93,10 +93,10 @@ class MoleculeModel(nn.Module):
         else:
             self.readout = self.create_ffn(args)
 
-        if self.organism_and_go:
+        if self.num_secondary_tasks > 0:
             self.combine = CombineEncodedReadout(
                 encoded_size=self.first_linear_dim,
-                readout_size=self.output_size - 1,
+                readout_size=self.output_size - self.num_secondary_tasks,
                 hidden_size=args.hidden_size,
                 activation=args.activation
             )
@@ -118,7 +118,7 @@ class MoleculeModel(nn.Module):
         :param args: A :class:`~chemprop.args.TrainArgs` object containing model arguments.
         :return: A PyTorch module with the feed-forward layers.
         """
-        output_size = self.output_size - 1 if self.organism_and_go else self.output_size
+        output_size = self.output_size - self.num_secondary_tasks
         dropout = nn.Dropout(args.dropout)
         activation = get_activation_function(args.activation)
 

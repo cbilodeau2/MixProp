@@ -276,11 +276,10 @@ class TrainArgs(CommonArgs):
     Path where GO hierarchy should loaded from (and saved if not downloaded).
     Needed if :code:`go_dag_predict=True`.
     """
-    organism_and_go: bool = False
+    num_secondary_tasks: int = 0
     """
-    Whether to jointly predict organism inhibition and GO term activity.
-    Organism inhibition is assumed to be in the first target column
-    while GO term activities are in the remaining columns.
+    Number of secondary prediction tasks, which are predicted using on the predictions on the first set of tasks.
+    Assumes these are listed as the last :code:`num_secondary_tasks` tasks.
     """
     calibrate: bool = False
     """Whether to calibration classification model predictions."""

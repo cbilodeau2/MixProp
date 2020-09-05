@@ -71,9 +71,9 @@ def cross_validate(args: TrainArgs,
         args.go_dag = load_go_dag(go_obo_path=args.go_obo_path, go_ids=args.task_names)
 
         # Permute tasks so that they line up with the prediction order of the DAGModel
-        task_names = args.task_names[1:] if args.organism_and_go else args.task_names
+        task_names = args.task_names[:-args.num_secondary_tasks] if args.num_secondary_tasks > 0 else args.task_names
         permutation = sorted(range(len(task_names)), key=lambda i: args.go_dag.node_to_index(task_names[i]))
-        permutation = [0] + [i + 1 for i in permutation] if args.organism_and_go else permutation
+        permutation += list(range(len(task_names), len(task_names) + args.num_secondary_tasks))
         data.permute_targets(permutation)
         args.task_names = [args.task_names[i] for i in permutation]
 
