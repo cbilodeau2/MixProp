@@ -471,9 +471,14 @@ def group_data_by_taxon(data: MoleculeDataset,
 
     for datapoint in tqdm(data):
         for taxon, target_indices in taxon_to_target_indices.items():
+            new_targets = [target if i in target_indices else None for i, target in enumerate(datapoint.targets)]
+
+            if set(new_targets) == {None}:
+                continue
+
             new_datapoint = MoleculeDatapoint(
                 smiles=datapoint.smiles,
-                targets=[target if i in target_indices else None for i, target in enumerate(datapoint.targets)],
+                targets=new_targets,
                 raw_lineage=taxon_to_lineage[taxon]
             )
             new_datapoint.link(datapoint)
