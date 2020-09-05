@@ -424,7 +424,7 @@ def group_by_taxon(datasets: List[MoleculeDataset], args: TrainArgs) -> List[Mol
         raise ValueError('Task to taxon mapping does not have the same tasks as the current data.')
 
     taxon_to_tasks = {}
-    for taxon, task in task_to_taxon.items():
+    for task, taxon in task_to_taxon.items():
         taxon_to_tasks.setdefault(taxon, []).append(task)
 
     taxon_to_target_indices = {
