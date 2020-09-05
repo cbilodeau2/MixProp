@@ -73,16 +73,17 @@ def fit_temperature(model: MoleculeModel,
     debug = logger.debug if logger is not None else print
 
     model.train()
+    device = model.temperatures.device
     nll_criterion = nn.BCEWithLogitsLoss(reduction='none')
     ece_criterion = ECELoss()
 
     # Get predictions and targets
     logits = predict(model=model, data_loader=data_loader, eval_mode=False)
-    logits = torch.FloatTensor(logits)
+    logits = torch.FloatTensor(logits).to(device)
     targets = data_loader.targets
-    mask = torch.Tensor([[x is not None for x in t] for t in targets])
+    mask = torch.Tensor([[x is not None for x in t] for t in targets]).to(device)
     mask_bool = mask.bool()
-    targets = torch.Tensor([[0 if x is None else x for x in t] for t in targets])
+    targets = torch.Tensor([[0 if x is None else x for x in t] for t in targets]).to(device)
 
     # Compute ECE prior to training
     ece = ece_criterion(logits, mask_bool, targets)
