@@ -70,7 +70,7 @@ def fit_temperature(model: MoleculeModel,
     :param data_loader: A :class:`~chemprop.data.data.MoleculeDataLoader`.
     :param logger: A logger for recording output.
     """
-    if logger is None:
+    if logger is not None:
         debug, info = logger.debug, logger.info
     else:
         debug = info = print
