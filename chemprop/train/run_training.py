@@ -200,9 +200,6 @@ def run_training(args: TrainArgs,
         for epoch in trange(args.epochs):
             debug(f'Epoch {epoch}')
 
-            if args.calibrate:
-                model.reset_temperatures()
-
             n_iter = train(
                 model=model,
                 data_loader=train_data_loader,

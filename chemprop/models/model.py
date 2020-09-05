@@ -106,7 +106,7 @@ class MoleculeModel(nn.Module):
         initialize_weights(self)
 
         # Temperature calibration
-        self.temperatures = self.reset_temperatures() if args.calibrate else None
+        self.temperatures = nn.Parameter(torch.ones(self.output_size)) if args.calibrate else None
 
         if args.use_taxon:
             self.create_lineage_embedding(args)
@@ -230,12 +230,6 @@ class MoleculeModel(nn.Module):
         else:
             raise ValueError(f'Lineage embedding type "{self.lineage_embedding_type}" not supported.')
 
-    def reset_temperatures(self) -> nn.Parameter:
-        """Resets the temperatures to 1."""
-        self.temperatures = nn.Parameter(torch.ones(self.output_size))
-
-        return self.temperatures
-
     def temperature_scale(self, logits: torch.FloatTensor) -> torch.FloatTensor:
         """Uses the temperatures to scale logits."""
         return logits / self.temperatures
@@ -288,7 +282,7 @@ class MoleculeModel(nn.Module):
                 output = self.multiclass_softmax(output)  # to get probabilities during evaluation, but not during training as we're using CrossEntropyLoss
 
         # Temperature calibration
-        if self.calibrate:
+        if self.calibrate and not self.training:
             output = self.temperature_scale(output)
 
         return output
