@@ -70,12 +70,23 @@ def fit_temperature(model: MoleculeModel,
     :param data_loader: A :class:`~chemprop.data.data.MoleculeDataLoader`.
     :param logger: A logger for recording output.
     """
-    info = logger.info if logger is not None else print
+    if logger is None:
+        debug, info = logger.debug, logger.info
+    else:
+        debug = info = print
 
     model.train()
     device = model.temperatures.device
     nll_criterion = nn.BCEWithLogitsLoss(reduction='none')
     ece_criterion = ECELoss()
+
+    def compute_nll(preds: torch.FloatTensor,
+                    mask: torch.FloatTensor,
+                    targets: torch.FloatTensor) -> torch.FloatTensor:
+        loss = nll_criterion(preds, targets) * mask
+        loss = loss.sum() / mask.sum()
+
+        return loss
 
     # Get predictions and targets
     logits = predict(model=model, data_loader=data_loader, eval_mode=False)
@@ -86,20 +97,25 @@ def fit_temperature(model: MoleculeModel,
     targets = torch.Tensor([[0 if x is None else x for x in t] for t in targets]).to(device)
 
     # Compute ECE prior to training
-    ece = ece_criterion(logits, mask_bool, targets)
-    info(f'ECE before calibration = {ece:.6f}')
+    ece_before = ece_criterion(logits, mask_bool, targets)
+    nll_before = compute_nll(logits, mask, targets)
 
     # Fit temperatures
     optimizer = optim.LBFGS([model.temperatures], lr=0.01, max_iter=50)
 
     def evaluate():
-        loss = nll_criterion(model.temperature_scale(logits), targets) * mask
-        loss = loss.sum() / mask.sum()
+        loss = compute_nll(model.temperature_scale(logits), mask, targets)
         loss.backward()
         return loss
 
     optimizer.step(evaluate)
 
-    ece = ece_criterion(model.temperature_scale(logits), mask_bool, targets)
-    info(f'ECE after calibration = {ece:.6f}')
-    info(f'Optimal temperatures = {model.temperatures.tolist()}')
+    preds = model.temperature_scale(logits)
+    nll_after = compute_nll(preds, mask, targets)
+    ece_after = ece_criterion(preds, mask_bool, targets)
+
+    info(f'ECE before calibration = {ece_before:.6f}')
+    info(f'ECE after calibration = {ece_after:.6f}')
+    info(f'NLL before calibration = {nll_before:.6f}')
+    info(f'NLL after calibration = {nll_after:.6f}')
+    debug(f'Optimal temperatures = {model.temperatures.tolist()}')
