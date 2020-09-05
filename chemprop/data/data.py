@@ -73,6 +73,13 @@ class MoleculeDatapoint:
 
         return self._mol
 
+    def link(self, datapoint: 'MoleculeDatapoint') -> None:
+        """Links this datapoint to another, thereby sharing pointers to save memory."""
+        self.row = datapoint.row
+        self.raw_features = datapoint.raw_features
+        self.features = datapoint.features
+        self._mol = datapoint.mol
+
     def set_features(self, features: np.ndarray) -> None:
         """
         Sets the features of the molecule.

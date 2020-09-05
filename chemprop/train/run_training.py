@@ -1,7 +1,9 @@
+import json
 from logging import Logger
 import os
 from typing import Dict, List
 
+from ete3 import NCBITaxa
 import numpy as np
 import pandas as pd
 from tensorboardX import SummaryWriter
@@ -15,7 +17,8 @@ from .predict import predict
 from .train import train
 from chemprop.args import TrainArgs
 from chemprop.constants import BY_ROW, MODEL_FILE_NAME
-from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, MoleculeDataset, split_data
+from chemprop.data import get_class_sizes, get_data, group_data_by_taxon, MoleculeDataLoader, MoleculeDataset, \
+    split_data
 from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, load_checkpoint, makedirs, \
@@ -57,6 +60,23 @@ def run_training(args: TrainArgs,
         train_data, val_data, _ = split_data(data=data, split_type=args.split_type, sizes=(0.8, 0.2, 0.0), seed=args.seed, num_folds=args.num_folds, args=args, logger=logger)
     else:
         train_data, val_data, test_data = split_data(data=data, split_type=args.split_type, sizes=args.split_sizes, seed=args.seed, num_folds=args.num_folds, args=args, logger=logger)
+
+    if args.taxon_to_tasks_path is not None:
+        info('Grouping data by taxonomy ID')
+
+        with open(args.taxon_to_tasks_path) as f:
+            taxon_to_tasks: Dict[int, List[str]] = json.load(f)
+
+        taxon_to_target_indices = {
+            taxon: {args.task_names.index(task) for task in tasks}
+            for taxon, tasks in taxon_to_tasks.items()
+        }
+        ncbi = NCBITaxa(args.ncbi_dbfile, args.ncbi_taxdump_file)
+        taxon_to_lineage = {taxon: ncbi.get_lineage(taxon) for taxon in taxon_to_target_indices}
+
+        train_data = group_data_by_taxon(data=train_data, taxon_to_target_indices=taxon_to_target_indices, taxon_to_lineage=taxon_to_lineage)
+        val_data = group_data_by_taxon(data=val_data, taxon_to_target_indices=taxon_to_target_indices, taxon_to_lineage=taxon_to_lineage)
+        test_data = group_data_by_taxon(data=test_data, taxon_to_target_indices=taxon_to_target_indices, taxon_to_lineage=taxon_to_lineage)
 
     if args.use_taxon:
         # Map taxonomy IDs to indices

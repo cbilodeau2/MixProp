@@ -3,7 +3,7 @@ import csv
 from logging import Logger
 import pickle
 from random import Random
-from typing import List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union
 import os
 
 from ete3 import NCBITaxa
@@ -146,9 +146,9 @@ def get_data(path: str,
         features_path = features_path if features_path is not None else args.features_path
         features_generator = features_generator if features_generator is not None else args.features_generator
         max_data_size = max_data_size if max_data_size is not None else args.max_data_size
-        use_taxon = getattr(args, 'use_taxon', False)
+        taxon_column = getattr(args, 'taxon_column', None)
     else:
-        use_taxon = False
+        taxon_column = None
 
     max_data_size = max_data_size or float('inf')
 
@@ -163,9 +163,9 @@ def get_data(path: str,
 
     skip_smiles = set()
 
-    # Load NCBI
-    if use_taxon:
+    if taxon_column is not None:
         ncbi = NCBITaxa(args.ncbi_dbfile, args.ncbi_taxdump_file)
+        taxon_to_lineage = {}
 
     # Load data
     with open(path) as f:
@@ -197,8 +197,9 @@ def get_data(path: str,
             all_smiles.append(smiles)
             all_targets.append(targets)
 
-            if use_taxon:
-                all_lineages.append(ncbi.get_lineage(row[args.taxon_column]))
+            if taxon_column is not None:
+                taxon = row[taxon_column]
+                all_lineages.append(taxon_to_lineage.setdefault(taxon, ncbi.get_lineage(taxon)))
 
             if features_data is not None:
                 all_features.append(features_data[i])
@@ -213,7 +214,7 @@ def get_data(path: str,
             MoleculeDatapoint(
                 smiles=smiles,
                 targets=targets,
-                raw_lineage=all_lineages[i] if use_taxon else None,
+                raw_lineage=all_lineages[i] if taxon_column is not None else None,
                 row=all_rows[i] if store_row else None,
                 features_generator=features_generator,
                 features=all_features[i] if features_data is not None else None
@@ -401,6 +402,42 @@ def split_data(data: MoleculeDataset,
 
     else:
         raise ValueError(f'split_type "{split_type}" not supported.')
+
+
+def group_data_by_taxon(data: MoleculeDataset,
+                        taxon_to_target_indices: Dict[int, Set[int]],
+                        taxon_to_lineage: Dict[int, List[int]]) -> MoleculeDataset:
+    r"""
+    Given a list of taxonomy IDs corresponding to the tasks, groups data by taxonomy ID.
+
+    Specifically, for each :class:`~chemprop.data.MoleculeDatapoint` in :code:`data`,
+    this function creates :code:`n` new :class:`~chemprop.data.MoleculeDatapoint`\ s
+    where :code:`n` is the number of unique taxonomy IDs in :code:`taxons`.
+
+    For instance, say tasks A and B are for taxon 1 and task C is for taxon 2.
+    Then the data point with :code:`{'smiles': <smiles>, 'targets': [1, 0, 1]}` gets split
+    into :code:`{'smiles': <smiles>, 'taxon': 1, 'targets': [1, 0, None]}`
+    and :code:`{'smiles': <smiles>, 'taxon': 2, 'targets': [None, None, 1]}`.
+
+    :param data: A :class:`~chemprop.data.MoleculeDataset`.
+    :param taxon_to_target_indices: A dictionary mapping taxonomy ID to a set of target indices.
+    :param taxon_to_lineage: A dictionary mapping taxonomy ID to a list of lineage taxonomy IDs.
+    :return: A new :class:`~chemprop.data.MoleculeDataset` where each :class:`~chemprop.data.MoleculeDatapoint`
+    has been split into multiple :class:`~chemprop.data.MoleculeDatapoint`\ s by taxonomy ID.
+    """
+    new_data = []
+
+    for datapoint in tqdm(data):
+        for taxon, target_indices in taxon_to_target_indices.items():
+            new_datapoint = MoleculeDatapoint(
+                smiles=datapoint.smiles,
+                targets=[target if i in target_indices else None for i, target in enumerate(datapoint.targets)],
+                raw_lineage=taxon_to_lineage[taxon]
+            )
+            new_datapoint.link(datapoint)
+            new_data.append(new_datapoint)
+
+    return MoleculeDataset(new_data)
 
 
 def get_class_sizes(data: MoleculeDataset) -> List[List[float]]:

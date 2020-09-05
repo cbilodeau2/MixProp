@@ -4,7 +4,6 @@ Currently uses temperature scaling from https://arxiv.org/pdf/1706.04599.pdf
 https://github.com/gpleiss/temperature_scaling/blob/master/temperature_scaling.py
 """
 import logging
-from typing import List
 
 import torch
 from torch import nn, optim
