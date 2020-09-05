@@ -15,12 +15,12 @@ from chemprop.nn_utils import get_activation_function, initialize_weights
 class CombineEncodedReadout(nn.Module):
     """Modules which combines the molecule encoding and readout to perform one additional prediction."""
 
-    def __init__(self, encoded_size: int, readout_size: int, hidden_size: int, activation: str):
+    def __init__(self, encoded_size: int, readout_size: int, hidden_size: int, extra_output_size: int, activation: str):
         super(CombineEncodedReadout, self).__init__()
         self.mlp = MLP(
             in_features=encoded_size + readout_size,
             hidden_features=hidden_size,
-            out_features=1,
+            out_features=extra_output_size,
             activation=activation
         )
 
@@ -28,8 +28,8 @@ class CombineEncodedReadout(nn.Module):
                 encoded: torch.FloatTensor,  # (batch_size, hidden_size)
                 readout: torch.FloatTensor  # (batch_size, output_size - 1)
                 ) -> torch.FloatTensor:  # (batch_size, output_size)
-        input = torch.cat((encoded, readout), dim=1)  # (batch_size, hidden_size + output_size - 1)
-        output = self.mlp(input)  # (batch_size, 1)
+        input = torch.cat((encoded, readout), dim=1)  # (batch_size, hidden_size + output_size - extra_output_size)
+        output = self.mlp(input)  # (batch_size, extra_output_size)
         output = torch.cat((output, readout), dim=1)  # (batch_size, output_size)
 
         return output
@@ -98,6 +98,7 @@ class MoleculeModel(nn.Module):
                 encoded_size=self.first_linear_dim,
                 readout_size=self.output_size - self.num_secondary_tasks,
                 hidden_size=args.hidden_size,
+                extra_output_size=self.num_secondary_tasks,
                 activation=args.activation
             )
         else:
