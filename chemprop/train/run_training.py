@@ -9,12 +9,13 @@ import torch
 from torch.optim.lr_scheduler import ExponentialLR
 from tqdm import trange
 
+from .calibration import fit_temperature
 from .evaluate import evaluate, evaluate_predictions
 from .predict import predict
 from .train import train
 from chemprop.args import TrainArgs
 from chemprop.constants import BY_ROW, MODEL_FILE_NAME
-from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, MoleculeDataset, split_data, StandardScaler
+from chemprop.data import get_class_sizes, get_data, MoleculeDataLoader, MoleculeDataset, split_data
 from chemprop.models import MoleculeModel
 from chemprop.nn_utils import param_count
 from chemprop.utils import build_optimizer, build_lr_scheduler, get_loss_func, load_checkpoint, makedirs, \
@@ -199,6 +200,9 @@ def run_training(args: TrainArgs,
         for epoch in trange(args.epochs):
             debug(f'Epoch {epoch}')
 
+            if args.calibrate:
+                model.reset_temperatures()
+
             n_iter = train(
                 model=model,
                 data_loader=train_data_loader,
@@ -210,8 +214,17 @@ def run_training(args: TrainArgs,
                 logger=logger,
                 writer=writer
             )
+
             if isinstance(scheduler, ExponentialLR):
                 scheduler.step()
+
+            if args.calibrate:
+                fit_temperature(
+                    model=model,
+                    data_loader=val_data_loader,
+                    logger=logger
+                )
+
             val_scores = evaluate(
                 model=model,
                 data_loader=val_data_loader,

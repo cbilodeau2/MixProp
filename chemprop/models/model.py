@@ -58,6 +58,7 @@ class MoleculeModel(nn.Module):
         self.device = args.device
         self.organism_and_go = args.organism_and_go
         self.output_size = args.num_tasks
+        self.calibrate = args.calibrate
 
         if self.classification:
             self.sigmoid = nn.Sigmoid()
@@ -103,6 +104,9 @@ class MoleculeModel(nn.Module):
             self.combine = combine_readout_only
 
         initialize_weights(self)
+
+        # Temperature calibration
+        self.temperatures = self.reset_temperatures() if args.calibrate else None
 
         if args.use_taxon:
             self.create_lineage_embedding(args)
@@ -226,6 +230,16 @@ class MoleculeModel(nn.Module):
         else:
             raise ValueError(f'Lineage embedding type "{self.lineage_embedding_type}" not supported.')
 
+    def reset_temperatures(self) -> nn.Parameter:
+        """Resets the temperatures to 1."""
+        self.temperatures = nn.Parameter(torch.ones(self.output_size))
+
+        return self.temperatures
+
+    def temperature_scale(self, logits: torch.FloatTensor) -> torch.FloatTensor:
+        """Uses the temperatures to scale logits."""
+        return logits / self.temperatures
+
     def featurize(self,
                   batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
                   features_batch: List[np.ndarray] = None,
@@ -272,5 +286,9 @@ class MoleculeModel(nn.Module):
             output = output.reshape((output.size(0), -1, self.num_classes))  # batch size x num targets x num classes per target
             if not self.training:
                 output = self.multiclass_softmax(output)  # to get probabilities during evaluation, but not during training as we're using CrossEntropyLoss
+
+        # Temperature calibration
+        if self.calibrate:
+            output = self.temperature_scale(output)
 
         return output

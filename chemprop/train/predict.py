@@ -10,7 +10,8 @@ from chemprop.models import MoleculeModel
 def predict(model: MoleculeModel,
             data_loader: MoleculeDataLoader,
             disable_progress_bar: bool = False,
-            scaler: StandardScaler = None) -> List[List[float]]:
+            scaler: StandardScaler = None,
+            eval_mode: bool = True) -> List[List[float]]:
     """
     Makes predictions on a dataset using an ensemble of models.
 
@@ -18,9 +19,11 @@ def predict(model: MoleculeModel,
     :param data_loader: A :class:`~chemprop.data.data.MoleculeDataLoader`.
     :param disable_progress_bar: Whether to disable the progress bar.
     :param scaler: A :class:`~chemprop.features.scaler.StandardScaler` object fit on the training targets.
+    :param eval_mode: Whether to set the model to eval mode (otherwise doesn't change the mode).
     :return: A list of lists of predictions. The outer list is molecules while the inner list is tasks.
     """
-    model.eval()
+    if eval_mode:
+        model.eval()
 
     preds = []
 

@@ -275,6 +275,8 @@ class TrainArgs(CommonArgs):
     Organism inhibition is assumed to be in the first target column
     while GO term activities are in the remaining columns.
     """
+    calibrate: bool = False
+    """Whether to calibration classification model predictions."""
 
     # Training arguments
     epochs: int = 30
@@ -469,6 +471,9 @@ class TrainArgs(CommonArgs):
                 self._crossval_index_sets = pickle.load(rf)
             self.num_folds = len(self.crossval_index_sets)
             self.seed = 0
+
+        if self.calibrate and self.dataset_type != 'classification':
+            raise ValueError('Can only perform calibration on classification datasets.')
 
         # Test settings
         if self.test:
