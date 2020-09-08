@@ -5,7 +5,6 @@ import pickle
 from typing import List, Optional, Tuple
 from typing_extensions import Literal
 
-from ete3 import NCBITaxa
 import torch
 from tap import Tap  # pip install typed-argument-parser (https://github.com/swansonk14/typed-argument-parser)
 
@@ -14,6 +13,7 @@ from chemprop.dag import RootedDAG
 from chemprop.features import get_available_features_generators
 
 
+DatasetType = Literal['regression', 'classification', 'multiclass']
 Metric = Literal['auc', 'prc-auc', 'rmse', 'mae', 'mse', 'r2', 'accuracy', 'cross_entropy']
 
 
@@ -156,7 +156,7 @@ class TrainArgs(CommonArgs):
     This is an alternative to using :code:`taxon_column` for when species information
     is known based on the task.
     """
-    dataset_type: Literal['regression', 'classification', 'multiclass']
+    dataset_type: DatasetType
     """Type of dataset. This determines the loss function used during training."""
     multilabel: bool = False
     """If :code:`dataset_type='classification'`, whether to use a multi-label loss function instead of BCE."""
