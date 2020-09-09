@@ -1,5 +1,6 @@
 """ Evaluates predictions. """
 from typing import List
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -12,8 +13,10 @@ from chemprop.train import evaluate_predictions
 class Args(Tap):
     pred_path: str  # Path to CSV file containing predictions.
     true_path: str  # Path to CSV file containing true values.
-    smiles_column: str = None  # Name of the column containing SMILES (if None, uses first column).
-    target_columns: List[str] = None  # List of columns containing target values (if None, uses all except smiles_columns).
+    pred_smiles_column: str = None  # Name of the column in pred_path containing SMILES (if None, uses first column).
+    true_smiles_column: str = None  # Name of the column in true_path containing SMILES (if None, uses first column).
+    pred_target_columns: List[str] = None  # List of columns in pred_path containing target values (if None, uses all except smiles_columns).
+    true_target_columns: List[str] = None  # List of columns in true_path containing target values (if None, uses all except smiles_columns).
     dataset_type: DatasetType  # Dataset type.
     metrics: List[Metric]  # List of metrics to apply.
     metric_by_row: bool = False  # Whether to evaluate the metric row-wise rather than column-wise.
@@ -25,16 +28,35 @@ def eval_preds(args: Args) -> None:
     pred = pd.read_csv(args.pred_path)
     true = pd.read_csv(args.true_path)
 
-    # Ensure that pred and true line up
-    smiles_column = args.smiles_column if args.smiles_column is not None else pred.columns[0]
-    target_columns = args.target_columns if args.target_columns is not None else set(pred.columns) - {smiles_column}
+    # Get SMILES and target columns
+    if args.pred_smiles_column is None:
+        args.pred_smiles_column = pred.columns[0]
 
-    # Ensure SMILES line up
-    assert pred[smiles_column].equals(true[smiles_column])
+    if args.true_smiles_column is None:
+        args.true_smiles_column = true.columns[0]
+
+    if args.pred_target_columns is None:
+        args.pred_target_columns = list(pred.columns)
+        args.pred_target_columns.remove(args.pred_smiles_column)
+
+    if args.true_target_columns is None:
+        args.true_target_columns = list(true.columns)
+        args.true_target_columns.remove(args.true_smiles_column)
+
+    # Ensure SMILES and targets line up
+    assert pred[args.pred_smiles_column].equals(true[args.true_smiles_column])
+
+    if len(args.pred_target_columns) != len(args.true_target_columns):
+        raise ValueError('Different number of targets between pred and true.')
+
+    if set(args.pred_target_columns) != set(args.true_target_columns):
+        warnings.warn(f'Target column names differ between pred and true.')
+    elif args.pred_target_columns != args.true_target_columns:
+        warnings.warn(f'Target column names are in a different order between pred and true.')
 
     # Extract predictions and true values
-    preds = pred[target_columns].to_numpy()
-    targets = true[target_columns].to_numpy()
+    preds = pred[args.pred_target_columns].to_numpy()
+    targets = true[args.true_target_columns].to_numpy()
 
     # NaN to None
     preds = np.where(np.isnan(preds), None, preds)
@@ -58,7 +80,7 @@ def eval_preds(args: Args) -> None:
     for metric, scores in all_scores.items():
         print(f'Overall {metric} = {np.nanmean(scores):.6f} +/- {np.nanstd(scores):.6f}')
 
-        for task, task_score in sorted(zip(target_columns, scores), key=lambda pair: pair[0]):
+        for task, task_score in sorted(zip(args.pred_target_columns, scores), key=lambda pair: pair[0]):
             print(f'    {task} {metric} = {task_score:.6f}')
 
 
