@@ -78,6 +78,10 @@ class MoleculeModel(nn.Module):
             self.first_linear_dim = args.hidden_size
             if args.use_input_features:
                 self.first_linear_dim += args.features_size
+
+        if args.atom_descriptors == 'descriptor':
+            self.first_linear_dim += args.atom_descriptors_size
+
         if args.use_taxon:
             self.first_linear_dim += args.hidden_size
 
@@ -238,6 +242,7 @@ class MoleculeModel(nn.Module):
     def featurize(self,
                   batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
                   features_batch: List[np.ndarray] = None,
+                  atom_descriptors_batch: List[np.ndarray] = None,
                   lineage_batch: List[List[int]] = None) -> torch.FloatTensor:
         """
         Computes feature vectors of the input by running the model except for the last layer.
@@ -245,14 +250,16 @@ class MoleculeModel(nn.Module):
         :param batch: A list of SMILES, a list of RDKit molecules, or a
                       :class:`~chemprop.features.featurization.BatchMolGraph`.
         :param features_batch: A list of numpy arrays containing additional features.
+        :param atom_descriptors_batch: A list of numpy arrays containing additional atom descriptors.
         :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: The feature vectors computed by the :class:`MoleculeModel`.
         """
-        return self.readout[:-1](self.encoder(batch, features_batch, lineage_batch))
+        return self.readout[:-1](self.encoder(batch, features_batch, atom_descriptors_batch, lineage_batch))
 
     def forward(self,
                 batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
                 features_batch: List[np.ndarray] = None,
+                atom_descriptors_batch: List[np.ndarray] = None,
                 lineage_batch: List[List[int]] = None) -> torch.FloatTensor:
         """
         Runs the :class:`MoleculeModel` on input.
@@ -260,6 +267,7 @@ class MoleculeModel(nn.Module):
         :param batch: A list of SMILES, a list of RDKit molecules, or a
                       :class:`~chemprop.features.featurization.BatchMolGraph`.
         :param features_batch: A list of numpy arrays containing additional features.
+        :param atom_descriptors_batch: A list of numpy arrays containing additional atom descriptors.
         :param lineage_batch: A list of list of taxonomy indices representing organism lineages.
         :return: The output of the :class:`MoleculeModel`, which is either property predictions
                  or molecule features if :code:`self.featurizer=True`.
@@ -268,9 +276,9 @@ class MoleculeModel(nn.Module):
             lineage_batch = self.embed_lineage(lineage_batch)
 
         if self.featurizer:
-            return self.featurize(batch, features_batch, lineage_batch)
+            return self.featurize(batch, features_batch, atom_descriptors_batch, lineage_batch)
 
-        encoded = self.encoder(batch, features_batch, lineage_batch)
+        encoded = self.encoder(batch, features_batch, atom_descriptors_batch, lineage_batch)
         readout = self.readout(encoded)
         output = self.combine(encoded, readout)
 

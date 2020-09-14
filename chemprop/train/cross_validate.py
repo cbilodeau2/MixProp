@@ -14,6 +14,7 @@ from chemprop.constants import BY_ROW, TEST_SCORES_FILE_NAME, TRAIN_LOGGER_NAME
 from chemprop.data import get_data, get_task_names, MoleculeDataset, validate_dataset_type
 from chemprop.go_utils import load_go_dag
 from chemprop.utils import create_logger, makedirs, timeit
+from chemprop.features import set_extra_atom_fdim
 
 
 @timeit(logger_name=TRAIN_LOGGER_NAME)
@@ -60,9 +61,22 @@ def cross_validate(args: TrainArgs,
 
     # Get data
     debug('Loading data')
-    data = get_data(path=args.data_path, args=args, logger=logger, skip_none_targets=True)
+    data = get_data(
+        path=args.data_path,
+        args=args,
+        logger=logger,
+        skip_none_targets=True
+    )
     validate_dataset_type(data, dataset_type=args.dataset_type)
     args.features_size = data.features_size()
+
+    if args.atom_descriptors == 'descriptor':
+        args.atom_descriptors_size = data.atom_descriptors_size()
+        args.ffn_hidden_size += args.atom_descriptors_size
+    elif args.atom_descriptors == 'feature':
+        args.atom_features_size = data.atom_features_size()
+        set_extra_atom_fdim(args.atom_features_size)
+
     debug(f'Number of tasks = {args.num_tasks}')
 
     # Load GO DAG if necessary

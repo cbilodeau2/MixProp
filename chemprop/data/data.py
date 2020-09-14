@@ -1,7 +1,7 @@
+import threading
 from collections import OrderedDict
-from functools import partial
 from random import Random
-from typing import Callable, Dict, Iterator, List, Optional, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 import numpy as np
 from torch.utils.data import DataLoader, Dataset, Sampler
@@ -13,7 +13,35 @@ from chemprop.features import BatchMolGraph, MolGraph
 
 
 # Cache of graph featurizations
+CACHE_GRAPH = True
 SMILES_TO_GRAPH: Dict[str, MolGraph] = {}
+
+
+def cache_graph() -> bool:
+    r"""Returns whether :class:`~chemprop.features.MolGraph`\ s will be cached."""
+    return CACHE_GRAPH
+
+
+def set_cache_graph(cache_graph: bool) -> None:
+    r"""Sets whether :class:`~chemprop.features.MolGraph`\ s will be cached."""
+    global CACHE_GRAPH
+    CACHE_GRAPH = cache_graph
+
+
+# Cache of RDKit molecules
+CACHE_MOL = True
+SMILES_TO_MOL: Dict[str, Chem.Mol] = {}
+
+
+def cache_mol() -> bool:
+    r"""Returns whether RDKit molecules will be cached."""
+    return CACHE_MOL
+
+
+def set_cache_mol(cache_mol: bool) -> None:
+    r"""Sets whether RDKit molecules will be cached."""
+    global CACHE_MOL
+    CACHE_MOL = cache_mol
 
 
 class MoleculeDatapoint:
@@ -25,7 +53,9 @@ class MoleculeDatapoint:
                  raw_lineage: List[int] = None,
                  row: OrderedDict = None,
                  features: np.ndarray = None,
-                 features_generator: List[str] = None):
+                 features_generator: List[str] = None,
+                 atom_features: np.ndarray = None,
+                 atom_descriptors: np.ndarray = None):
         """
         :param smiles: The SMILES string for the molecule.
         :param targets: A list of targets for the molecule (contains None for unknown target values).
@@ -44,7 +74,8 @@ class MoleculeDatapoint:
         self.row = row
         self.features = features
         self.features_generator = features_generator
-        self._mol = 'None'  # Initialize with 'None' to distinguish between None returned by invalid molecule
+        self.atom_descriptors = atom_descriptors
+        self.atom_features = atom_features
 
         # Generate additional features if given a generator
         if self.features_generator is not None:
@@ -58,20 +89,30 @@ class MoleculeDatapoint:
             self.features = np.array(self.features)
 
         # Fix nans in features
+        replace_token = 0
         if self.features is not None:
-            replace_token = 0
             self.features = np.where(np.isnan(self.features), replace_token, self.features)
 
+        # Fix nans in atom_descriptors
+        if self.atom_descriptors is not None:
+            self.atom_descriptors = np.where(np.isnan(self.atom_descriptors), replace_token, self.atom_descriptors)
+
+        # Fix nans in atom_features
+        if self.atom_features is not None:
+            self.atom_features = np.where(np.isnan(self.atom_features), replace_token, self.atom_features)
+
         # Save a copy of the raw features and targets to enable different scaling later on
-        self.raw_features, self.raw_targets = features, targets
+        self.raw_features, self.raw_targets = self.features, self.targets
 
     @property
     def mol(self) -> Chem.Mol:
-        """Gets the corresponding RDKit molecule for this molecule's SMILES (with lazy loading)."""
-        if self._mol == 'None':
-            self._mol = Chem.MolFromSmiles(self.smiles)
+        """Gets the corresponding RDKit molecule for this molecule's SMILES."""
+        mol = SMILES_TO_MOL.get(self.smiles, Chem.MolFromSmiles(self.smiles))
 
-        return self._mol
+        if cache_mol():
+            SMILES_TO_MOL[self.smiles] = mol
+
+        return mol
 
     def link(self, datapoint: 'MoleculeDatapoint') -> None:
         """Links this datapoint to another, thereby sharing pointers to save memory."""
@@ -161,7 +202,7 @@ class MoleculeDataset(Dataset):
         """
         return [d.mol for d in self._data]
 
-    def batch_graph(self, cache: bool = False) -> BatchMolGraph:
+    def batch_graph(self) -> BatchMolGraph:
         r"""
         Constructs a :class:`~chemprop.features.BatchMolGraph` with the graph featurization of all the molecules.
 
@@ -171,8 +212,6 @@ class MoleculeDataset(Dataset):
            set of :class:`MoleculeDatapoint`\ s changes, then the returned :class:`~chemprop.features.BatchMolGraph`
            will be incorrect for the underlying data.
 
-        :param cache: Whether to store the individual :class:`~chemprop.features.MolGraph` featurizations
-                      for each molecule in a global cache.
         :return: A :class:`~chemprop.features.BatchMolGraph` containing the graph featurization of all the molecules.
         """
         if self._batch_graph is None:
@@ -181,8 +220,8 @@ class MoleculeDataset(Dataset):
                 if d.smiles in SMILES_TO_GRAPH:
                     mol_graph = SMILES_TO_GRAPH[d.smiles]
                 else:
-                    mol_graph = MolGraph(d.mol)
-                    if cache:
+                    mol_graph = MolGraph(d.mol, d.atom_features)
+                    if cache_graph():
                         SMILES_TO_GRAPH[d.smiles] = mol_graph
                 mol_graphs.append(mol_graph)
 
@@ -200,6 +239,18 @@ class MoleculeDataset(Dataset):
             return None
 
         return [d.features for d in self._data]
+
+    def atom_descriptors(self) -> List[np.ndarray]:
+        """
+        Returns the atom descriptors associated with each molecule (if they exit).
+
+        :return: A list of 2D numpy arrays containing the atom descriptors
+                 for each molecule or None if there are no features.
+        """
+        if len(self._data) == 0 or self._data[0].atom_descriptors is None:
+            return None
+
+        return [d.atom_descriptors for d in self._data]
 
     def targets(self) -> List[List[Optional[float]]]:
         """
@@ -224,6 +275,24 @@ class MoleculeDataset(Dataset):
         :return: The size of the additional features vector.
         """
         return len(self._data[0].features) if len(self._data) > 0 and self._data[0].features is not None else None
+
+    def atom_descriptors_size(self) -> int:
+        """
+        Returns the size of custom additional atom descriptors vector associated with the molecules.
+
+        :return: The size of the additional atom descriptor vector.
+        """
+        return len(self._data[0].atom_descriptors[0]) \
+            if len(self._data) > 0 and self._data[0].atom_descriptors is not None else None
+
+    def atom_features_size(self) -> int:
+        """
+        Returns the size of custom additional atom features vector associated with the molecules.
+
+        :return: The size of the additional atom feature vector.
+        """
+        return len(self._data[0].atom_features[0]) \
+            if len(self._data) > 0 and self._data[0].atom_features is not None else None
 
     def normalize_features(self, scaler: StandardScaler = None, replace_nan_token: int = 0) -> StandardScaler:
         """
@@ -408,7 +477,7 @@ class MoleculeSampler(Sampler):
         return self.length
 
 
-def construct_molecule_batch(data: List[MoleculeDatapoint], cache: bool = False) -> MoleculeDataset:
+def construct_molecule_batch(data: List[MoleculeDatapoint]) -> MoleculeDataset:
     r"""
     Constructs a :class:`MoleculeDataset` from a list of :class:`MoleculeDatapoint`\ s.
 
@@ -416,12 +485,10 @@ def construct_molecule_batch(data: List[MoleculeDatapoint], cache: bool = False)
     :class:`MoleculeDataset`.
 
     :param data: A list of :class:`MoleculeDatapoint`\ s.
-    :param cache: Whether to store the individual :class:`~chemprop.features.MolGraph` featurizations
-                  for each molecule in a global cache.
     :return: A :class:`MoleculeDataset` containing all the :class:`MoleculeDatapoint`\ s.
     """
     data = MoleculeDataset(data)
-    data.batch_graph(cache=cache)  # Forces computation and caching of the BatchMolGraph for the molecules
+    data.batch_graph()  # Forces computation and caching of the BatchMolGraph for the molecules
 
     return data
 
@@ -433,7 +500,6 @@ class MoleculeDataLoader(DataLoader):
                  dataset: MoleculeDataset,
                  batch_size: int = 50,
                  num_workers: int = 8,
-                 cache: bool = False,
                  class_balance: bool = False,
                  shuffle: bool = False,
                  seed: int = 0):
@@ -441,8 +507,6 @@ class MoleculeDataLoader(DataLoader):
         :param dataset: The :class:`MoleculeDataset` containing the molecules to load.
         :param batch_size: Batch size.
         :param num_workers: Number of workers used to build batches.
-        :param cache: Whether to store the individual :class:`~chemprop.features.MolGraph` featurizations
-                      for each molecule in a global cache.
         :param class_balance: Whether to perform class balancing (i.e., use an equal number of positive
                               and negative molecules). Class balance is only available for single task
                               classification datasets. Set shuffle to True in order to get a random
@@ -453,10 +517,15 @@ class MoleculeDataLoader(DataLoader):
         self._dataset = dataset
         self._batch_size = batch_size
         self._num_workers = num_workers
-        self._cache = cache
         self._class_balance = class_balance
         self._shuffle = shuffle
         self._seed = seed
+        self._context = None
+        self._timeout = 0
+        is_main_thread = threading.current_thread() is threading.main_thread()
+        if not is_main_thread and self._num_workers > 0:
+            self._context = 'forkserver'  # In order to prevent a hanging
+            self._timeout = 3600  # Just for sure that the DataLoader won't hang
 
         self._sampler = MoleculeSampler(
             dataset=self._dataset,
@@ -470,7 +539,9 @@ class MoleculeDataLoader(DataLoader):
             batch_size=self._batch_size,
             sampler=self._sampler,
             num_workers=self._num_workers,
-            collate_fn=partial(construct_molecule_batch, cache=self._cache)
+            collate_fn=construct_molecule_batch,
+            multiprocessing_context=self._context,
+            timeout=self._timeout
         )
 
     @property

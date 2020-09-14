@@ -10,6 +10,7 @@ from tap import Tap  # pip install typed-argument-parser (https://github.com/swa
 
 from chemprop.constants import BY_ROW
 from chemprop.dag import RootedDAG
+from chemprop.data import set_cache_mol
 from chemprop.features import get_available_features_generators
 
 
@@ -87,6 +88,23 @@ class CommonArgs(Tap):
     """Number of workers for the parallel data loading (0 means sequential)."""
     batch_size: int = 50
     """Batch size."""
+    atom_descriptors: Literal['feature', 'descriptor'] = None
+    """
+    Custom extra atom descriptors.
+    :code:`feature`: used as atom features to featurize a given molecule. 
+    :code:`descriptor`: used as descriptor and concatenated to the machine learned atomic representation.
+    """
+    atom_descriptors_path: str = None
+    """Path to the extra atom descriptors."""
+    no_cache_mol: bool = False
+    """
+    Whether to not cache the RDKit molecule for each SMILES string to reduce memory usage (cached by default).
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(CommonArgs, self).__init__(*args, **kwargs)
+        self._atom_features_size = 0
+        self._atom_descriptors_size = 0
 
     @property
     def device(self) -> torch.device:
@@ -115,6 +133,24 @@ class CommonArgs(Tap):
         """Whether to apply normalization with a :class:`~chemprop.data.scaler.StandardScaler` to the additional molecule-level features."""
         return not self.no_features_scaling
 
+    @property
+    def atom_features_size(self) -> int:
+        """The size of the atom features."""
+        return self._atom_features_size
+
+    @atom_features_size.setter
+    def atom_features_size(self, atom_features_size: int) -> None:
+        self._atom_features_size = atom_features_size
+
+    @property
+    def atom_descriptors_size(self) -> int:
+        """The size of the atom descriptors."""
+        return self._atom_descriptors_size
+
+    @atom_descriptors_size.setter
+    def atom_descriptors_size(self, atom_descriptors_size: int) -> None:
+        self._atom_descriptors_size = atom_descriptors_size
+
     def add_arguments(self) -> None:
         self.add_argument('--gpu', choices=list(range(torch.cuda.device_count())))
         self.add_argument('--features_generator', choices=get_available_features_generators())
@@ -130,6 +166,12 @@ class CommonArgs(Tap):
         # Validate features
         if self.features_generator is not None and 'rdkit_2d_normalized' in self.features_generator and self.features_scaling:
             raise ValueError('When using rdkit_2d_normalized features, --no_features_scaling must be specified.')
+
+        # Validate atom descriptors
+        if self.atom_descriptors is not None and self.atom_descriptors_path is None:
+            raise ValueError('When using atom_descriptors, --atom_descriptors_path must be specified')
+
+        set_cache_mol(not self.no_cache_mol)
 
 
 class TrainArgs(CommonArgs):
@@ -213,11 +255,12 @@ class TrainArgs(CommonArgs):
     """The number of batches between each logging of the training loss."""
     show_individual_scores: bool = False
     """Show all scores for individual targets, not just average, at the end."""
-    cache_cutoff: int = 10000
+    cache_cutoff: float = 10000
     """
     Maximum number of molecules in dataset to allow caching.
     Below this number, caching is used and data loading is sequential.
     Above this number, caching is not used and data loading is parallel.
+    Use "inf" to always cache.
     """
     ncbi_dbfile: str = None
     """Path where NCBI taxonomy sqlite file should loaded from."""
@@ -289,6 +332,10 @@ class TrainArgs(CommonArgs):
     For regression, predicts the mean value for each task.
     For classification, predicts the proportion of actives for each task.
     """
+    aggregation: Literal['mean', 'sum', 'norm'] = 'mean'
+    """Aggregation scheme for atomic vectors into molecular vectors"""
+    aggregation_norm: int = 100
+    """For norm aggregation, number by which to divide summed up atomic features"""
 
     # Training arguments
     epochs: int = 30
