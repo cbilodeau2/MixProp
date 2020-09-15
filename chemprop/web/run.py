@@ -14,19 +14,12 @@ class WebArgs(Tap):
     host: str = '127.0.0.1'  # Host IP address
     port: int = 5000  # Port
     debug: bool = False  # Whether to run in debug mode
-    demo: bool = False  # Display only demo features
+    demo: bool = True  # Display only demo features
     initdb: bool = False  # Initialize Database
 
 
-<<<<<<< HEAD:web/run.py
-if __name__ == "__main__":
-    args = Args().parse_args()
-
-    # app.config['DEMO'] = True
-=======
 def run_web(args: WebArgs) -> None:
     app.config['DEMO'] = args.demo
->>>>>>> 81d21506373485c15c95301a2b3767340d6fcf24:chemprop/web/run.py
 
     db.init_app(app)
 

@@ -6,10 +6,11 @@
 {% endblock %}
 
 {% block content %}
+    {% if not config['DEMO'] %}
     {{ add_checkpoint('checkpoints', checkpoint_upload_warnings, checkpoint_upload_errors) }}
-
+	
     <hr>
-
+    {% endif %}
     <h3>Model Checkpoints</h3>
     <table class="table table-hover" style="width:auto">
         {% for checkpoint in checkpoints %}
@@ -22,9 +23,11 @@
                     <a href="{{ url_for('download_checkpoint', checkpoint=checkpoint['id']) }}">
                         <button class="btn btn-default btn-sm">Download</button>
                     </a>
-                    <a href="{{ url_for('delete_checkpoint', checkpoint=checkpoint['id']) }}">
+		    {% if not config['DEMO'] %}
+		    <a href="{{ url_for('delete_checkpoint', checkpoint=checkpoint['id']) }}">
                         <button class="btn btn-danger btn-sm">Delete</button>
                     </a>
+		    {% endif %}
                 </th>
             </tr>
         {% endfor %}
