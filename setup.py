@@ -48,6 +48,7 @@ setup(
     install_requires=[
         'ete3>=3.1.1',
         'flask>=1.1.2',
+        'goatools>=1.0.6',
         'hyperopt>=0.2.3',
         'matplotlib>=3.1.3',
         'networkx>=2.4',
