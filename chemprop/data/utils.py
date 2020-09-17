@@ -155,14 +155,15 @@ def get_data(path: str,
         atom_descriptors_path = atom_descriptors_path if atom_descriptors_path is not None \
             else args.atom_descriptors_path
         max_data_size = max_data_size if max_data_size is not None else args.max_data_size
-        taxon_column = getattr(args, 'taxon_column', None)
-    else:
-        taxon_column = None
 
         if args.atom_descriptors == 'feature':
             atom_features = load_atom_features(atom_descriptors_path)
         elif args.atom_descriptors == 'descriptor':
             atom_descriptors = load_atom_features(atom_descriptors_path)
+
+        taxon_column = getattr(args, 'taxon_column', None)
+    else:
+        taxon_column = None
 
     max_data_size = max_data_size or float('inf')
 
