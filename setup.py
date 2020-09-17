@@ -46,6 +46,7 @@ setup(
         ]
     },
     install_requires=[
+        'ete3>=3.1.1',
         'flask>=1.1.2',
         'hyperopt>=0.2.3',
         'matplotlib>=3.1.3',
