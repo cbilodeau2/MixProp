@@ -176,9 +176,12 @@ class MPN(nn.Module):
         else:
             self.encoder = nn.ModuleList([MPNEncoder(args, self.atom_fdim, self.bond_fdim)
                                           for _ in range(args.number_of_molecules)])
+            
+        self.use_fractions = args.fractions
 
     def forward(self,
                 batch: Union[List[List[str]], List[List[Chem.Mol]], BatchMolGraph],
+                fractions_batch: List[float] = None,
                 features_batch: List[np.ndarray] = None,
                 atom_descriptors_batch: List[np.ndarray] = None) -> torch.FloatTensor:
         """
@@ -223,5 +226,31 @@ class MPN(nn.Module):
                 features_batch = features_batch.view(1, -1)
 
             output = torch.cat([output, features_batch], dim=1)
+        
+        # Concatenate fractions:
+        if self.use_fractions:
+            
+#             if len(np.shape(fractions_batch)) == 1:                
+#                 fractions_batch = fractions_batch.view(1, -1)
+#             #print(np.shape(fractions_batch))
+#             #print(fractions_batch)
+#             temp = np.array(fractions_batch)
+# #             np.shape()
+# #             print(fractions_batch)
+#             temp = torch.from_numpy(temp)
+#             fractions_batch = temp.float().to(self.device)
 
+#             print('FRACTIONS')
+#             print(fractions_batch)
+#             print(type(fractions_batch))
+#             if fractions_batch is None:
+#                 print('BATCHBATCH')
+#                 print(batch)
+#                 print(type(batch))
+#                 print(batch)
+            fractions_batch = torch.tensor(fractions_batch)
+            fractions_batch = fractions_batch.float()
+            fractions_batch = fractions_batch.to(self.device)
+            output = torch.cat([output, fractions_batch], dim=1)
+            
         return output

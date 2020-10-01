@@ -74,7 +74,7 @@ def run_training(args: TrainArgs,
             train_data=train_data,
             val_data=val_data,
             test_data=test_data,
-            smiles_column=args.smiles_column
+            smiles_column=args.smiles_columns
         )
 
     if args.features_scaling:

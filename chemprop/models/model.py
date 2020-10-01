@@ -39,6 +39,7 @@ class MoleculeModel(nn.Module):
 
         self.create_encoder(args)
         self.create_ffn(args)
+        self.use_fractions = args.fractions
 
         initialize_weights(self)
 
@@ -65,6 +66,8 @@ class MoleculeModel(nn.Module):
             first_linear_dim = args.hidden_size * args.number_of_molecules
             if args.use_input_features:
                 first_linear_dim += args.features_size
+            if args.fractions:
+                first_linear_dim += args.number_of_molecules
 
         if args.atom_descriptors == 'descriptor':
             first_linear_dim += args.atom_descriptors_size
@@ -115,6 +118,7 @@ class MoleculeModel(nn.Module):
 
     def forward(self,
                 batch: Union[List[str], List[Chem.Mol], BatchMolGraph],
+                fractions_batch: List[float] = None,
                 features_batch: List[np.ndarray] = None,
                 atom_descriptors_batch: List[np.ndarray] = None) -> torch.FloatTensor:
         """
@@ -130,7 +134,9 @@ class MoleculeModel(nn.Module):
         if self.featurizer:
             return self.featurize(batch, features_batch, atom_descriptors_batch)
 
-        output = self.ffn(self.encoder(batch, features_batch, atom_descriptors_batch))
+#         print('FRACTIONS IN MODEL.PY')
+#         print(fractions_batch)
+        output = self.ffn(self.encoder(batch, fractions_batch, features_batch, atom_descriptors_batch))
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:
@@ -140,4 +146,5 @@ class MoleculeModel(nn.Module):
             if not self.training:
                 output = self.multiclass_softmax(output)  # to get probabilities during evaluation, but not during training as we're using CrossEntropyLoss
 
+        #print(output)
         return output

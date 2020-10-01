@@ -1,31 +1,18 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=0
-
-#MAKE SURE FEATURES PATH IS COMMENTED CORRECTLY
-
-# feat_name=Hansen #THINGS HAVE BEEN HCANGED
-# set_name=G3_G5
-
-# name=sol_hyperopt
-# data_file=data/DowData/solubility/${feat_name}_${set_name}/data.csv 
-# checkpoint_folder=checkpoints/${feat_name}_${set_name}_random
-# features_file=data/DowData/solubility/${feat_name}_${set_name}/features.csv
+export CUDA_VISIBLE_DEVICES=2
 
 
-
-name=tox21
-data_file=data/MolNet/tox21.csv
-checkpoint_folder=checkpoints/tox21
+name=bubble_florence_split_pretrained
+data_file=data/DowData/bubble_point/florence_split/bubble_exclmol_train.csv
+checkpoint_folder=checkpoints/bubble_florence_split
 #features_file=data/DowData/solubility/${feat_name}_${set_name}/features.csv
 
 
-#pretraining_model_path=None
+data_type=regression
+split_type=random #random 
 
-data_type=classification # regression
-split_type=scaffold_balanced #random #scaffold_balanced
-
-n_epochs=30
+n_epochs=100
 dropout=0
 num_iters=20
 num_folds=10
@@ -37,9 +24,13 @@ mkdir $checkpoint_folder
 mkdir $checkpoint_subfolder
 config=$checkpoint_subfolder/config.json
 
-#echo "python train.py --data_path $data_file --dataset_type $data_type --save_dir $checkpoint_subfolder"
-#python train.py --data_path $data_file --dataset_type $data_type --save_dir $checkpoint_subfolder --split_type $split_type --save_smiles_splits --epochs $n_epochs --dropout $dropout --features_path $features_file
+python train.py --data_path $data_file --dataset_type $data_type --number_of_molecules 2 --save_dir $checkpoint_subfolder --split_type $split_type --save_smiles_splits --epochs $n_epochs --dropout $dropout --smiles_column mol1 mol2 --mpn_shared --fractions --split_sizes 0.85 0.1 0.05 --hidden_size 200 --ffn_num_layers 4 --depth 4 --batch_size 50 --checkpoint_path test_model.pt
 
-python hyperparameter_optimization.py --data_path $data_file --dataset_type $data_type --save_dir $checkpoint_subfolder --split_type $split_type --num_iters $num_iters --num_folds $num_folds --ensemble_size $ensemble_size --save_smiles_splits --config_save_path $config #--features_path $features_file
+#--features_path $features_file
+
+
+
+
+#python hyperparameter_optimization.py --data_path $data_file --dataset_type $data_type --save_dir $checkpoint_subfolder --split_type $split_type --num_iters $num_iters --num_folds $num_folds --ensemble_size $ensemble_size --save_smiles_splits --config_save_path $config #--features_path $features_file
 
 

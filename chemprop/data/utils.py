@@ -19,7 +19,8 @@ from chemprop.features import load_features, load_atom_features
 def get_task_names(path: str,
                    smiles_columns: List[str] = None,
                    target_columns: List[str] = None,
-                   ignore_columns: List[str] = None) -> List[str]:
+                   ignore_columns: List[str] = None,
+                   fractions: List[float] = None) -> List[str]:
     """
     Gets the task names from a data CSV file.
 
@@ -42,11 +43,16 @@ def get_task_names(path: str,
     columns = get_header(path)
 
     smiles_columns = smiles_columns if smiles_columns is not None else [None]
-
+    if fractions:
+        fraction_columns = columns[len(smiles_columns):2*len(smiles_columns)]
+    else:
+        fraction_columns = []
+        
+        
     if None in smiles_columns:
         smiles_columns = columns[:len(smiles_columns)]
 
-    ignore_columns = set(smiles_columns + ([] if ignore_columns is None else ignore_columns))
+    ignore_columns = set(smiles_columns + fraction_columns+([] if ignore_columns is None else ignore_columns)) #set(smiles_columns + ([] if ignore_columns is None else ignore_columns))
 
     target_names = [column for column in columns if column not in ignore_columns]
 
@@ -119,7 +125,8 @@ def get_data(path: str,
              max_data_size: int = None,
              store_row: bool = False,
              logger: Logger = None,
-             skip_none_targets: bool = False) -> MoleculeDataset:
+             skip_none_targets: bool = False,
+             fractions: List[float] = None) -> MoleculeDataset:
     """
     Gets SMILES and target values from a CSV file.
 
@@ -145,6 +152,8 @@ def get_data(path: str,
              with other info such as additional features when desired.
     """
     debug = logger.debug if logger is not None else print
+    if args.fractions is True:
+        fractions = True
 
     # Load atomic descriptors
     atom_features = None
@@ -187,29 +196,39 @@ def get_data(path: str,
         columns = reader.fieldnames
 
         # By default, the SMILES column is the first column
+        #print('fRACTION TIME:',fractions)
+        if fractions:
+            fraction_columns = columns[len(smiles_columns):2*len(smiles_columns)]
+        else:
+            fraction_columns = []
         if None in smiles_columns:
             smiles_columns = columns[:len(smiles_columns)]
 
-        # By default, the targets columns are all the columns except the SMILES column
+        # By default, the targets columns are all the columns except the SMILES column and fraction columns:
         if target_columns is None:
-            ignore_columns = set(smiles_columns + ([] if ignore_columns is None else ignore_columns))
+            ignore_columns = set(smiles_columns + fraction_columns+([] if ignore_columns is None else ignore_columns))
             target_columns = [column for column in columns if column not in ignore_columns]
 
-        all_smiles, all_targets, all_rows, all_features = [], [], [], []
+        all_smiles, all_targets, all_rows, all_features, all_fractions = [], [], [], [], []
         for i, row in tqdm(enumerate(reader)):
+           
             smiles = [row[c] for c in smiles_columns]
 
             if smiles in skip_smiles:
                 continue
 
             targets = [float(row[column]) if row[column] != '' else None for column in target_columns]
-
+            if fractions:
+                fracs = [float(row[column]) if row[column] != '' else None for column in fraction_columns]
+            
             # Check whether all targets are None and skip if so
             if skip_none_targets and all(x is None for x in targets):
                 continue
 
             all_smiles.append(smiles)
             all_targets.append(targets)
+            if fractions:
+                all_fractions.append(fracs)
 
             if features_data is not None:
                 all_features.append(features_data[i])
@@ -219,20 +238,45 @@ def get_data(path: str,
 
             if len(all_smiles) >= max_data_size:
                 break
-
-        data = MoleculeDataset([
-            MoleculeDatapoint(
-                smiles=smiles,
-                targets=targets,
-                row=all_rows[i] if store_row else None,
-                features_generator=features_generator,
-                features=all_features[i] if features_data is not None else None,
-                atom_features=atom_features[i] if atom_features is not None else None,
-                atom_descriptors=atom_descriptors[i] if atom_descriptors is not None else None,
-            ) for i, (smiles, targets) in tqdm(enumerate(zip(all_smiles, all_targets)),
-                                               total=len(all_smiles))
-        ])
-
+        #print(target_columns,targets,all_targets)
+        #print('LENGTH OF SMILES',all_smiles)
+        #print('LENGTH OF SMILES',all_fractions)
+        #print('LENGTH OF SMILES',all_targets)
+        #print('LENGTH OF SMILES',[[x,y,z] for x,y,z in zip(all_smiles, all_fractions, all_targets)])
+        if fractions:
+            data = MoleculeDataset([
+                MoleculeDatapoint(
+                    smiles=smiles,
+                    targets=targets,
+                    fractions=fracs,
+                    row=all_rows[i] if store_row else None,
+                    features_generator=features_generator,
+                    features=all_features[i] if features_data is not None else None,
+                    atom_features=atom_features[i] if atom_features is not None else None,
+                    atom_descriptors=atom_descriptors[i] if atom_descriptors is not None else None,
+                ) for i, (smiles, fracs, targets) in tqdm(enumerate(zip(all_smiles, all_fractions, all_targets)),
+                                                   total=len(all_smiles))
+            ])
+        else:
+            data = MoleculeDataset([
+                MoleculeDatapoint(
+                    smiles=smiles,
+                    targets=targets,
+                    row=all_rows[i] if store_row else None,
+                    features_generator=features_generator,
+                    features=all_features[i] if features_data is not None else None,
+                    atom_features=atom_features[i] if atom_features is not None else None,
+                    atom_descriptors=atom_descriptors[i] if atom_descriptors is not None else None,
+                ) for i, (smiles, targets) in tqdm(enumerate(zip(all_smiles, all_targets)),
+                                                   total=len(all_smiles))
+            ])
+        
+        
+#         for i, (smiles, targets) in enumerate(zip(all_smiles,all_targets)):
+#             print(i)
+#         print(data.targets(),'utils')
+        #print(data.num_tasks(),'utils')
+    #print('PASS2')
     # Filter out invalid SMILES
     if skip_invalid_smiles:
         original_data_len = len(data)
@@ -241,6 +285,8 @@ def get_data(path: str,
         if len(data) < original_data_len:
             debug(f'Warning: {original_data_len - len(data)} SMILES are invalid.')
 
+#     print(data)
+#     print(len(data))
     return data
 
 

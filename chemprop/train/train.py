@@ -45,15 +45,21 @@ def train(model: MoleculeModel,
     for batch in tqdm(data_loader, total=len(data_loader), leave=False):
         # Prepare batch
         batch: MoleculeDataset
-        mol_batch, features_batch, target_batch, atom_descriptors_batch = \
-            batch.batch_graph(), batch.features(), batch.targets(), batch.atom_descriptors()
+        mol_batch, fractions_batch, features_batch, target_batch, atom_descriptors_batch = \
+            batch.batch_graph(), batch.fractions(), batch.features(), batch.targets(), batch.atom_descriptors()
         mask = torch.Tensor([[x is not None for x in tb] for tb in target_batch])
         targets = torch.Tensor([[0 if x is None else x for x in tb] for tb in target_batch])
 
         # Run model
         model.zero_grad()
-        preds = model(mol_batch, features_batch, atom_descriptors_batch)
-
+#         print('MOL BATCH')
+#         print(mol_batch)
+#         print('FRACTIONS BATCH')
+#         print(fractions_batch)
+        preds = model(mol_batch, fractions_batch, features_batch, atom_descriptors_batch)
+#         print('PREDS')
+#         print(preds)
+        
         # Move tensors to correct device
         mask = mask.to(preds.device)
         targets = targets.to(preds.device)
@@ -70,18 +76,21 @@ def train(model: MoleculeModel,
         iter_count += 1
 
         loss.backward()
+        #print('PASS 1')
         if args.grad_clip:
             nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
 
         if isinstance(scheduler, NoamLR):
             scheduler.step()
-
+        
+        #print('PASS 1.5')
         n_iter += len(batch)
 
         # Log and/or add to tensorboard
         if (n_iter // args.batch_size) % args.log_frequency == 0:
             lrs = scheduler.get_lr()
+            #print('PASS 2')
             pnorm = compute_pnorm(model)
             gnorm = compute_gnorm(model)
             loss_avg = loss_sum / iter_count

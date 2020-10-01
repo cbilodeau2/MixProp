@@ -400,7 +400,6 @@ def save_smiles_splits(data_path: str,
                        smiles_column: str = None) -> None:
     """
     Saves indices of train/val/test split as a pickle file.
-
     :param data_path: Path to data CSV file.
     :param save_dir: Path where pickle files will be saved.
     :param train_data: Train :class:`~chemprop.data.data.MoleculeDataset`.
@@ -417,7 +416,11 @@ def save_smiles_splits(data_path: str,
         if smiles_column is None:
             smiles_column_index = 0
         else:
-            smiles_column_index = header.index(smiles_column)
+            #print(header.index())
+            smiles_column_index = header.index(smiles_column[0])
+            #print(smiles_column_index)
+            
+            
 
         lines_by_smiles = {}
         indices_by_smiles = {}
@@ -441,11 +444,11 @@ def save_smiles_splits(data_path: str,
             writer = csv.writer(f)
             writer.writerow(header)
             for smiles in dataset.smiles():
-                writer.writerow(lines_by_smiles[smiles])
+                writer.writerow(lines_by_smiles[smiles[0]])
 
         split_indices = []
         for smiles in dataset.smiles():
-            split_indices.append(indices_by_smiles[smiles])
+            split_indices.append(indices_by_smiles[smiles[0]])
             split_indices = sorted(split_indices)
         all_split_indices.append(split_indices)
 

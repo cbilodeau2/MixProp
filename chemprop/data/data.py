@@ -54,7 +54,8 @@ class MoleculeDatapoint:
                  features: np.ndarray = None,
                  features_generator: List[str] = None,
                  atom_features: np.ndarray = None,
-                 atom_descriptors: np.ndarray = None):
+                 atom_descriptors: np.ndarray = None,
+                 fractions: List[float] = None):
         """
         :param smiles: A list of the SMILES strings for the molecules.
         :param targets: A list of targets for the molecule (contains None for unknown target values).
@@ -72,6 +73,7 @@ class MoleculeDatapoint:
         self.features_generator = features_generator
         self.atom_descriptors = atom_descriptors
         self.atom_features = atom_features
+        self.fractions = fractions
 
         # Generate additional features if given a generator
         if self.features_generator is not None:
@@ -104,7 +106,9 @@ class MoleculeDatapoint:
 
         # Save a copy of the raw features and targets to enable different scaling later on
         self.raw_features, self.raw_targets = self.features, self.targets
-
+#         print(targets,'data')
+#         print('PASS')
+        
     @property
     def mol(self) -> List[Chem.Mol]:
         """Gets the corresponding list of RDKit molecules for the corresponding SMILES list."""
@@ -115,6 +119,12 @@ class MoleculeDatapoint:
                 SMILES_TO_MOL[s] = m
 
         return mol
+    
+    def fractions(self) -> float:
+        """Gets the list of fractions for the corresponding SMILES list."""
+
+        self.fractions = fractions
+        #return self.fractions
 
     def set_features(self, features: np.ndarray) -> None:
         """
@@ -240,7 +250,15 @@ class MoleculeDataset(Dataset):
             return None
 
         return [d.atom_descriptors for d in self._data]
+    
+    def fractions(self) -> List[List[Optional[float]]]:
+        """
+        Returns the targets associated with each molecule.
 
+        :return: A list of lists of floats (or None) containing the targets.
+        """
+        return [d.fractions for d in self._data]
+    
     def targets(self) -> List[List[Optional[float]]]:
         """
         Returns the targets associated with each molecule.

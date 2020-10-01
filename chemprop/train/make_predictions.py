@@ -40,7 +40,7 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
         if not hasattr(args, key):
             setattr(args, key, value)
     args: Union[PredictArgs, TrainArgs]
-
+    print('FRACTIONS?',args.fractions)
     print('Loading data')
     if smiles is not None:
         full_data = get_data_from_smiles(
@@ -55,6 +55,7 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
     print('Validating SMILES')
     full_to_valid_indices = {}
     valid_index = 0
+    print('LENGTH OF DATA',len(full_data))
     for full_index in range(len(full_data)):
         if all(mol is not None for mol in full_data[full_index].mol):
             full_to_valid_indices[full_index] = valid_index

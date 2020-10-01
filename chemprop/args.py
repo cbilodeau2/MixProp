@@ -101,6 +101,10 @@ class CommonArgs(Tap):
     """
     Whether to not cache the RDKit molecule for each SMILES string to reduce memory usage (cached by default).
     """
+    fractions: bool = False
+    """
+    Whether fractions are present in training data file
+    """
 
     def __init__(self, *args, **kwargs):
         super(CommonArgs, self).__init__(*args, **kwargs)
@@ -501,6 +505,8 @@ class InterpretArgs(CommonArgs):
     """Minimum number of atoms in rationale."""
     prop_delta: float = 0.5
     """Minimum score to count as positive."""
+    fractions: bool = False
+    
 
     def process_args(self) -> None:
         super(InterpretArgs, self).process_args()
