@@ -3,9 +3,9 @@
 export CUDA_VISIBLE_DEVICES=2
 
 
-name=bubble_florence_split_pretrained
-data_file=data/DowData/bubble_point/florence_split/bubble_exclmol_train.csv
-checkpoint_folder=checkpoints/bubble_florence_split
+name=sol_new
+data_file=data/DowData/solubility/Joback_OneMol/data.csv
+checkpoint_folder=checkpoints/sol_new
 #features_file=data/DowData/solubility/${feat_name}_${set_name}/features.csv
 
 
@@ -24,7 +24,9 @@ mkdir $checkpoint_folder
 mkdir $checkpoint_subfolder
 config=$checkpoint_subfolder/config.json
 
-python train.py --data_path $data_file --dataset_type $data_type --number_of_molecules 2 --save_dir $checkpoint_subfolder --split_type $split_type --save_smiles_splits --epochs $n_epochs --dropout $dropout --smiles_column mol1 mol2 --mpn_shared --fractions --split_sizes 0.85 0.1 0.05 --hidden_size 200 --ffn_num_layers 4 --depth 4 --batch_size 50 --checkpoint_path test_model.pt
+python train.py --data_path $data_file --dataset_type $data_type --number_of_molecules 1 --save_dir $checkpoint_subfolder --split_type $split_type --save_smiles_splits --epochs $n_epochs --dropout $dropout --smiles_column SMILES
+
+#python train.py --data_path $data_file --dataset_type $data_type --number_of_molecules 2 --save_dir $checkpoint_subfolder --split_type $split_type --save_smiles_splits --epochs $n_epochs --dropout $dropout --smiles_column mol1 mol2 --mpn_shared --fractions --split_sizes 0.85 0.1 0.05 --hidden_size 200 --ffn_num_layers 4 --depth 4 --batch_size 50 --checkpoint_path test_model.pt
 
 #--features_path $features_file
 

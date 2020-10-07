@@ -6,5 +6,6 @@
 *.pt
 *.json
 *.sqlite3
+*.tar
 chemprop.egg-info
 docs/build
