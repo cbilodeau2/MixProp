@@ -15,7 +15,7 @@ from chemprop.features import get_available_features_generators
 
 
 DatasetType = Literal['regression', 'classification', 'multiclass']
-Metric = Literal['auc', 'prc-auc', 'rmse', 'mae', 'mse', 'r2', 'accuracy', 'cross_entropy']
+Metric = Literal['auc', 'prc-auc', 'rmse', 'mae', 'mse', 'r2', 'accuracy', 'cross_entropy', 'binary_cross_entropy']
 
 
 def get_checkpoint_paths(checkpoint_path: Optional[str] = None,
@@ -64,8 +64,12 @@ def get_checkpoint_paths(checkpoint_path: Optional[str] = None,
 class CommonArgs(Tap):
     """:class:`CommonArgs` contains arguments that are used in both :class:`TrainArgs` and :class:`PredictArgs`."""
 
-    smiles_column: str = None
-    """Name of the column containing SMILES strings. By default, uses the first column."""
+    smiles_columns: List[str] = None
+    """List of names of the columns containing SMILES strings. 
+    By default, uses the first :code:`number_of_molecules` columns."""
+    number_of_molecules: int = 1
+    """Number of molecules in each input to the model.
+    This must equal the length of :code:`smiles_column` (if not :code:`None`)."""
     checkpoint_dir: str = None
     """Directory from which to load model checkpoints (walks directory and ensembles all models that are found)."""
     checkpoint_path: str = None
@@ -151,7 +155,7 @@ class CommonArgs(Tap):
     def atom_descriptors_size(self, atom_descriptors_size: int) -> None:
         self._atom_descriptors_size = atom_descriptors_size
 
-    def add_arguments(self) -> None:
+    def configure(self) -> None:
         self.add_argument('--gpu', choices=list(range(torch.cuda.device_count())))
         self.add_argument('--features_generator', choices=get_available_features_generators())
 
@@ -167,9 +171,19 @@ class CommonArgs(Tap):
         if self.features_generator is not None and 'rdkit_2d_normalized' in self.features_generator and self.features_scaling:
             raise ValueError('When using rdkit_2d_normalized features, --no_features_scaling must be specified.')
 
+        if self.smiles_columns is None:
+            self.smiles_columns = [None] * self.number_of_molecules
+        elif len(self.smiles_columns) != self.number_of_molecules:
+            raise ValueError('Length of smiles_columns must match number_of_molecules.')
+
         # Validate atom descriptors
-        if self.atom_descriptors is not None and self.atom_descriptors_path is None:
-            raise ValueError('When using atom_descriptors, --atom_descriptors_path must be specified')
+        if (self.atom_descriptors is None) != (self.atom_descriptors_path is None):
+            raise ValueError('If atom_descriptors is specified, then an atom_descriptors_path must be provided '
+                             'and vice versa.')
+
+        if self.atom_descriptors is not None and self.number_of_molecules > 1:
+            raise NotImplementedError('Atom descriptors are currently only supported with one molecule '
+                                      'per input (i.e., number_of_molecules = 1).')
 
         set_cache_mol(not self.no_cache_mol)
 
@@ -276,6 +290,9 @@ class TrainArgs(CommonArgs):
     """Dimensionality of hidden layers in MPN."""
     depth: int = 3
     """Number of message passing steps."""
+    mpn_shared: bool = False
+    """Whether to use the same message passing neural network for all input molecules
+    Only relevant if :code:`number_of_molecules > 1`"""
     dropout: float = 0.0
     """Dropout probability."""
     activation: Literal['ReLU', 'LeakyReLU', 'PReLU', 'tanh', 'SELU', 'ELU'] = 'ReLU'
@@ -384,7 +401,7 @@ class TrainArgs(CommonArgs):
     @property
     def minimize_score(self) -> bool:
         """Whether the model should try to minimize the score metric or maximize it."""
-        return self.metric in {'rmse', 'mae', 'mse', 'cross_entropy'}
+        return self.metric in {'rmse', 'mae', 'mse', 'cross_entropy', 'binary_cross_entropy'}
 
     @property
     def use_input_features(self) -> bool:
@@ -493,7 +510,7 @@ class TrainArgs(CommonArgs):
                              f'Please only include it once.')
 
         for metric in self.metrics:
-            if not ((self.dataset_type == 'classification' and metric in ['auc', 'prc-auc', 'accuracy']) or
+            if not ((self.dataset_type == 'classification' and metric in ['auc', 'prc-auc', 'accuracy', 'binary_cross_entropy']) or
                     (self.dataset_type == 'regression' and metric in ['rmse', 'mae', 'mse', 'r2']) or
                     (self.dataset_type == 'multiclass' and metric in ['cross_entropy', 'accuracy'])):
                 raise ValueError(f'Metric "{metric}" invalid for dataset type "{self.dataset_type}".')
@@ -632,8 +649,12 @@ class SklearnPredictArgs(Tap):
 
     test_path: str
     """Path to CSV file containing testing data for which predictions will be made."""
-    smiles_column: str = None
-    """Name of the column containing SMILES strings. By default, uses the first column."""
+    smiles_columns: List[str] = None
+    """List of names of the columns containing SMILES strings. 
+    By default, uses the first :code:`number_of_molecules` columns."""
+    number_of_molecules: int = 1
+    """Number of molecules in each input to the model.
+    This must equal the length of :code:`smiles_column` (if not :code:`None`)."""
     preds_path: str
     """Path to CSV file where predictions will be saved."""
     checkpoint_dir: str = None
@@ -644,6 +665,12 @@ class SklearnPredictArgs(Tap):
     """List of paths to model checkpoints (:code:`.pkl` files)"""
 
     def process_args(self) -> None:
+
+        if self.smiles_columns is None:
+            self.smiles_columns = [None] * self.number_of_molecules
+        elif len(self.smiles_columns) != self.number_of_molecules:
+            raise ValueError('Length of smiles_columns must match number_of_molecules.')
+
         # Load checkpoint paths
         self.checkpoint_paths = get_checkpoint_paths(
             checkpoint_path=self.checkpoint_path,

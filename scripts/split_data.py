@@ -20,7 +20,7 @@ class Args(Tap):
     save_dir: str  # Directory where train, validation, and test sets will be saved
     smiles_column: str = None  # Name of the column containing SMILES strings. By default, uses the first column.
     split_type: Literal['random', 'scaffold_balanced'] = 'random'  # Split type
-    split_sizes: Tuple[int, int, int] = (0.8, 0.1, 0.1)  # Split sizes
+    split_sizes: Tuple[float, float, float] = (0.8, 0.1, 0.1)  # Split sizes
     seed: int = 0  # Random seed
 
 
@@ -32,11 +32,11 @@ def run_split_data(args: Args):
         lines = list(reader)
 
     # Load SMILES
-    smiles = get_smiles(path=args.data_path, smiles_column=args.smiles_column)
+    smiles = get_smiles(path=args.data_path, smiles_columns=args.smiles_column)
 
     # Make sure lines and smiles line up
     assert len(lines) == len(smiles)
-    assert all(smile in line for smile, line in zip(smiles, lines))
+    assert all(s in line for smile, line in zip(smiles, lines) for s in smile)
 
     # Create data
     data = []

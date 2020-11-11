@@ -5,6 +5,8 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+from rdkit import Chem
+from rdkit.Chem import PandasTools
 
 
 def save_features(path: str, features: List[np.ndarray]) -> None:
@@ -56,20 +58,59 @@ def load_features(path: str) -> np.ndarray:
     return features
 
 
-def load_atom_features(path: str) -> List[np.ndarray]:
+def load_valid_atom_features(path: str, smiles: List[str]) -> List[np.ndarray]:
     """
-    Loads features saved in a .pkl file.
+    Loads features saved in a variety of formats.
+
+    Supported formats:
+
+    * :code:`.npz` descriptors are saved as 2D array for each molecule in the order of that in the data.csv
+    * :code:`.pkl` / :code:`.pckl` / :code:`.pickle` containing a pandas dataframe with smiles as index and numpy array of descriptors as columns
+    * :code:'.sdf' containing all mol blocks with descriptors as entries
 
     :param path: Path to file containing atomwise features.
     :return: A list of 2D array.
     """
 
-    features_df = pd.read_pickle(path)
-    if features_df.iloc[0, 0].ndim == 1:
+    extension = os.path.splitext(path)[1]
+
+    if extension == '.npz':
+        container = np.load(path)
+        features = [container[key] for key in container]
+
+    elif extension in ['.pkl', '.pckl', '.pickle']:
+        features_df = pd.read_pickle(path)
+        if features_df.iloc[0, 0].ndim == 1:
+            features = features_df.apply(lambda x: np.stack(x.tolist(), axis=1), axis=1).tolist()
+        elif features_df.iloc[0, 0].ndim == 2:
+            features = features_df.apply(lambda x: np.concatenate(x.tolist(), axis=1), axis=1).tolist()
+        else:
+            raise ValueError(f'Atom descriptors input {path} format not supported')
+
+    elif extension == '.sdf':
+        features_df = PandasTools.LoadSDF(path).drop(['ID', 'ROMol'], axis=1).set_index('SMILES')
+
+        features_df = features_df[~features_df.index.duplicated()]
+
+        # locate atomic descriptors columns
+        features_df = features_df.iloc[:, features_df.iloc[0, :].apply(lambda x: isinstance(x, str) and ',' in x).to_list()]
+        features_df = features_df.reindex(smiles)
+        if features_df.isnull().any().any():
+            raise ValueError('Invalid custom atomic descriptors file, Nan found in data')
+
+        features_df = features_df.applymap(lambda x: np.array(x.replace('\r', '').replace('\n', '').split(',')).astype(float))
+
+        # Truncate by number of atoms
+        num_atoms = {x: Chem.MolFromSmiles(x).GetNumAtoms() for x in features_df.index.to_list()}
+
+        def truncate_arrays(r):
+            return r.apply(lambda x: x[:num_atoms[r.name]])
+
+        features_df = features_df.apply(lambda x: truncate_arrays(x), axis=1)
+
         features = features_df.apply(lambda x: np.stack(x.tolist(), axis=1), axis=1).tolist()
-    elif features_df.iloc[0, 0].ndim == 2:
-        features = features_df.apply(lambda x: np.concatenate(x.tolist(), axis=1), axis=1).tolist()
+
     else:
-        raise ValueError(f'Atom descriptors input {path} format not supported')
+        raise ValueError(f'Extension "{extension}" is not supported.')
 
     return features
