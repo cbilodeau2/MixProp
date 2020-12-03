@@ -48,7 +48,7 @@ class MoleculeDatapoint:
     """A :class:`MoleculeDatapoint` contains a single molecule and its associated features and targets."""
 
     def __init__(self,
-                 smiles: str,
+                 smiles: List[str],
                  targets: List[Optional[float]] = None,
                  row: OrderedDict = None,
                  features: np.ndarray = None,
@@ -56,7 +56,7 @@ class MoleculeDatapoint:
                  atom_features: np.ndarray = None,
                  atom_descriptors: np.ndarray = None):
         """
-        :param smiles: The SMILES string for the molecule.
+        :param smiles: A list of the SMILES strings for the molecules.
         :param targets: A list of targets for the molecule (contains None for unknown target values).
         :param row: The raw CSV row containing the information for this molecule.
         :param features: A numpy array containing additional features (e.g., Morgan fingerprint).
@@ -79,8 +79,13 @@ class MoleculeDatapoint:
 
             for fg in self.features_generator:
                 features_generator = get_features_generator(fg)
-                if self.mol is not None and self.mol.GetNumHeavyAtoms() > 0:
-                    self.features.extend(features_generator(self.mol))
+                for m in self.mol:
+                    if m is not None and m.GetNumHeavyAtoms() > 0:
+                        self.features.extend(features_generator(m))
+                    # for H2
+                    elif m is not None and m.GetNumHeavyAtoms() == 0:
+                        # not all features are equally long, so use methane as dummy molecule to determine length
+                        self.features.extend(np.zeros(len(features_generator(Chem.MolFromSmiles('C')))))
 
             self.features = np.array(self.features)
 
@@ -101,14 +106,24 @@ class MoleculeDatapoint:
         self.raw_features, self.raw_targets = self.features, self.targets
 
     @property
-    def mol(self) -> Chem.Mol:
-        """Gets the corresponding RDKit molecule for this molecule's SMILES."""
-        mol = SMILES_TO_MOL.get(self.smiles, Chem.MolFromSmiles(self.smiles))
-
+    def mol(self) -> List[Chem.Mol]:
+        """Gets the corresponding list of RDKit molecules for the corresponding SMILES list."""
+        mol = [SMILES_TO_MOL.get(s, Chem.MolFromSmiles(s)) for s in self.smiles]
+        
         if cache_mol():
-            SMILES_TO_MOL[self.smiles] = mol
+            for s, m in zip(self.smiles, mol):
+                SMILES_TO_MOL[s] = m
 
         return mol
+
+    @property
+    def number_of_molecules(self) -> int:
+        """
+        Gets the number of molecules in the :class:`MoleculeDatapoint`.
+
+        :return: The number of molecules.
+        """
+        return len(self.smiles)
 
     def set_features(self, features: np.ndarray) -> None:
         """
@@ -117,6 +132,14 @@ class MoleculeDatapoint:
         :param features: A 1D numpy array of features for the molecule.
         """
         self.features = features
+
+    def extend_features(self, features: np.ndarray) -> None:
+        """
+        Extends the features of the molecule.
+
+        :param features: A 1D numpy array of extra features for the molecule.
+        """
+        self.features = np.append(self.features, features) if self.features is not None else features
 
     def num_tasks(self) -> int:
         """
@@ -151,23 +174,40 @@ class MoleculeDataset(Dataset):
         self._batch_graph = None
         self._random = Random()
 
-    def smiles(self) -> List[str]:
+    def smiles(self, flatten: bool = False) -> Union[List[str], List[List[str]]]:
         """
-        Returns a list containing the SMILES associated with each molecule.
+        Returns a list containing the SMILES list associated with each :class:`MoleculeDatapoint`.
 
-        :return: A list of SMILES strings.
+        :param flatten: Whether to flatten the returned SMILES to a list instead of a list of lists.
+        :return: A list of SMILES or a list of lists of SMILES, depending on :code:`flatten`.
         """
+        if flatten:
+            return [smiles for d in self._data for smiles in d.smiles]
+
         return [d.smiles for d in self._data]
 
-    def mols(self) -> List[Chem.Mol]:
+    def mols(self, flatten: bool = False) -> Union[List[Chem.Mol], List[List[Chem.Mol]]]:
         """
-        Returns the RDKit molecules associated with each molecule.
+        Returns a list of the RDKit molecules associated with each :class:`MoleculeDatapoint`.
 
-        :return: A list of RDKit molecules.
+        :param flatten: Whether to flatten the returned RDKit molecules to a list instead of a list of lists.
+        :return: A list of SMILES or a list of lists of RDKit molecules, depending on :code:`flatten`.
         """
+        if flatten:
+            return [mol for d in self._data for mol in d.mol]
+
         return [d.mol for d in self._data]
 
-    def batch_graph(self) -> BatchMolGraph:
+    @property
+    def number_of_molecules(self) -> int:
+        """
+        Gets the number of molecules in each :class:`MoleculeDatapoint`.
+
+        :return: The number of molecules.
+        """
+        return self._data[0].number_of_molecules if len(self._data) > 0 else None
+
+    def batch_graph(self) -> List[BatchMolGraph]:
         r"""
         Constructs a :class:`~chemprop.features.BatchMolGraph` with the graph featurization of all the molecules.
 
@@ -177,20 +217,30 @@ class MoleculeDataset(Dataset):
            set of :class:`MoleculeDatapoint`\ s changes, then the returned :class:`~chemprop.features.BatchMolGraph`
            will be incorrect for the underlying data.
 
-        :return: A :class:`~chemprop.features.BatchMolGraph` containing the graph featurization of all the molecules.
+        :return: A list of :class:`~chemprop.features.BatchMolGraph` containing the graph featurization of all the
+                 molecules in each :class:`MoleculeDatapoint`.
         """
         if self._batch_graph is None:
+            self._batch_graph = []
+
             mol_graphs = []
             for d in self._data:
-                if d.smiles in SMILES_TO_GRAPH:
-                    mol_graph = SMILES_TO_GRAPH[d.smiles]
-                else:
-                    mol_graph = MolGraph(d.mol, d.atom_features)
-                    if cache_graph():
-                        SMILES_TO_GRAPH[d.smiles] = mol_graph
-                mol_graphs.append(mol_graph)
+                mol_graphs_list = []
+                for s, m in zip(d.smiles, d.mol):
+                    if s in SMILES_TO_GRAPH:
+                        mol_graph = SMILES_TO_GRAPH[s]
+                    else:
+                        if len(d.smiles) > 1 and d.atom_features is not None:
+                            raise NotImplementedError('Atom descriptors are currently only supported with one molecule '
+                                                      'per input (i.e., number_of_molecules = 1).')
 
-            self._batch_graph = BatchMolGraph(mol_graphs)
+                        mol_graph = MolGraph(m, d.atom_features)
+                        if cache_graph():
+                            SMILES_TO_GRAPH[s] = mol_graph
+                    mol_graphs_list.append(mol_graph)
+                mol_graphs.append(mol_graphs_list)
+
+            self._batch_graph = [BatchMolGraph([g[i] for g in mol_graphs]) for i in range(len(mol_graphs[0]))]
 
         return self._batch_graph
 

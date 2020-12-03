@@ -25,7 +25,7 @@ class Args(Tap):
     restart: bool = False  # Whether to not load partially complete featurization and instead start from scratch
     sequential: bool = False  # Whether to run sequentially rather than in parallel
 
-    def add_arguments(self) -> None:
+    def configure(self) -> None:
         self.add_argument('--features_generator', choices=get_available_features_generators())
 
 
@@ -61,7 +61,7 @@ def generate_and_save_features(args: Args):
     makedirs(args.save_path, isfile=True)
 
     # Get data and features function
-    smiles = get_smiles(path=args.data_path, smiles_column=args.smiles_column)
+    smiles = get_smiles(path=args.data_path, smiles_columns=args.smiles_column, flatten=True)
     features_generator = get_features_generator(args.features_generator)
     temp_save_dir = args.save_path + '_temp'
 

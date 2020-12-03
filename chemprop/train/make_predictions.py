@@ -11,7 +11,7 @@ from chemprop.utils import load_args, load_checkpoint, load_scalers, makedirs, t
 
 
 @timeit()
-def make_predictions(args: PredictArgs, smiles: List[str] = None) -> List[List[Optional[float]]]:
+def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[List[Optional[float]]]:
     """
     Loads data and a trained model and uses the model to make predictions on the data.
 
@@ -20,11 +20,10 @@ def make_predictions(args: PredictArgs, smiles: List[str] = None) -> List[List[O
 
     :param args: A :class:`~chemprop.args.PredictArgs` object containing arguments for
                  loading data and a model and making predictions.
-    :param smiles: SMILES to make predictions on.
+    :param smiles: List of list of SMILES to make predictions on.
     :return: A list of lists of target predictions.
     """
     print('Loading training args')
-    scaler, features_scaler = load_scalers(args.checkpoint_paths[0])
     train_args = load_args(args.checkpoint_paths[0])
     num_tasks, task_names = train_args.num_tasks, train_args.task_names
 
@@ -50,20 +49,14 @@ def make_predictions(args: PredictArgs, smiles: List[str] = None) -> List[List[O
             features_generator=args.features_generator
         )
     else:
-        full_data = get_data(
-            path=args.test_path,
-            args=args,
-            target_columns=[],
-            ignore_columns=[],
-            skip_invalid_smiles=False,
-            store_row=True
-        )
+        full_data = get_data(path=args.test_path, target_columns=[], ignore_columns=[], skip_invalid_smiles=False,
+                             args=args, store_row=True)
 
     print('Validating SMILES')
     full_to_valid_indices = {}
     valid_index = 0
     for full_index in range(len(full_data)):
-        if full_data[full_index].mol is not None:
+        if all(mol is not None for mol in full_data[full_index].mol):
             full_to_valid_indices[full_index] = valid_index
             valid_index += 1
 
@@ -74,10 +67,6 @@ def make_predictions(args: PredictArgs, smiles: List[str] = None) -> List[List[O
         return [None] * len(full_data)
 
     print(f'Test size = {len(test_data):,}')
-
-    # Normalize features
-    if args.features_scaling:
-        test_data.normalize_features(features_scaler)
 
     # Predict with each model individually and sum predictions
     if args.dataset_type == 'multiclass':
@@ -94,8 +83,16 @@ def make_predictions(args: PredictArgs, smiles: List[str] = None) -> List[List[O
 
     print(f'Predicting with an ensemble of {len(args.checkpoint_paths)} models')
     for checkpoint_path in tqdm(args.checkpoint_paths, total=len(args.checkpoint_paths)):
-        # Load model
+        # Load model and scalers
         model = load_checkpoint(checkpoint_path, device=args.device)
+        scaler, features_scaler = load_scalers(checkpoint_path)
+
+        # Normalize features
+        if args.features_scaling:
+            test_data.reset_features_and_targets()
+            test_data.normalize_features(features_scaler)
+
+        # Make predictions
         model_preds = predict(
             model=model,
             data_loader=test_data_loader,

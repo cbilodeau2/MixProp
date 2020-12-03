@@ -200,20 +200,23 @@ def train():
     gpu = request.form.get('gpu')
     data_path = os.path.join(app.config['DATA_FOLDER'], f'{data_name}.csv')
     dataset_type = request.form.get('datasetType', 'regression')
+    use_progress_bar = request.form.get('useProgressBar', 'True') == 'True'
 
     # Create and modify args
     args = TrainArgs().parse_args([
         '--data_path', data_path,
         '--dataset_type', dataset_type,
         '--epochs', str(epochs),
-        '--ensemble_size', str(ensemble_size)
+        '--ensemble_size', str(ensemble_size),
     ])
 
     # Get task names
-    args.task_names = get_task_names(path=data_path)
+    args.task_names = get_task_names(path=data_path, smiles_columns=[None])
 
     # Check if regression/classification selection matches data
-    data = get_data(path=data_path)
+    data = get_data(path=data_path, smiles_columns=[None])
+    #set the number of molecules through the length of the smiles_columns for now, we need to add an option to the site later
+
     targets = data.targets()
     unique_targets = {target for row in targets for target in row if target is not None}
 
@@ -249,18 +252,21 @@ def train():
     with TemporaryDirectory() as temp_dir:
         args.save_dir = temp_dir
 
-        process = mp.Process(target=progress_bar, args=(args, PROGRESS))
-        process.start()
-        TRAINING = 1
+        if use_progress_bar:
+            process = mp.Process(target=progress_bar, args=(args, PROGRESS))
+            process.start()
+            TRAINING = 1
 
         # Run training
         logger = create_logger(name=TRAIN_LOGGER_NAME, save_dir=args.save_dir, quiet=args.quiet)
         task_scores = run_training(args, data, logger)[args.metrics[0]]
-        process.join()
 
-        # Reset globals
-        TRAINING = 0
-        PROGRESS = mp.Value('d', 0.0)
+        if use_progress_bar:
+            process.join()
+
+            # Reset globals
+            TRAINING = 0
+            PROGRESS = mp.Value('d', 0.0)
 
         # Check if name overlap
         if checkpoint_name != ckpt_name:
@@ -324,6 +330,8 @@ def predict():
 
         # Get remaining smiles
         smiles.extend(get_smiles(data_path))
+
+    smiles = [[s] for s in smiles]
 
     models = db.get_models(ckpt_id)
     model_paths = [os.path.join(app.config['CHECKPOINT_FOLDER'], f'{model["id"]}.pt') for model in models]
@@ -559,7 +567,7 @@ def download_checkpoint(checkpoint: int):
 
     :param checkpoint: The name of the checkpoint to download.
     """
-    ckpt = db.query_db(f'SELECT * FROM ckpt WHERE id = {checkpoint}', one = True)
+    ckpt = db.query_db(f'SELECT * FROM ckpt WHERE id = {checkpoint}', one=True)
     models = db.get_models(checkpoint)
 
     model_data = io.BytesIO()
