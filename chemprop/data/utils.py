@@ -291,7 +291,7 @@ def split_data(data: MoleculeDataset,
     :return: A tuple of :class:`~chemprop.data.MoleculeDataset`\ s containing the train,
              validation, and test splits of the data.
     """
-    if not (len(sizes) == 3 and sum(sizes) == 1):
+    if not (len(sizes) == 3 and abs(sum(sizes) -1) < 1e-4):
         raise ValueError('Valid split sizes must sum to 1 and must have three sizes: train, validation, and test.')
 
     random = Random(seed)

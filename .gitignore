@@ -8,3 +8,7 @@
 *.sqlite3
 chemprop.egg-info
 docs/build
+mithrim_scripts/
+results/
+input/
+.gitignore
