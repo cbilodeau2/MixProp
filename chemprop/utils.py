@@ -460,6 +460,7 @@ def save_smiles_splits(data_path: str,
             writer = csv.writer(f)
             writer.writerow(header)
             for smiles in dataset.smiles():
+                print(smiles)
                 writer.writerow(lines_by_smiles[smiles])
 
         split_indices = []

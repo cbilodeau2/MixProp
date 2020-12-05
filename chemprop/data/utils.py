@@ -245,7 +245,6 @@ def get_data(path: str,
                 atom_features = descriptors
             elif args.atom_descriptors == 'descriptor':
                 atom_descriptors = descriptors
-
         data = MoleculeDataset([
             MoleculeDatapoint(
                 smiles=smiles,
