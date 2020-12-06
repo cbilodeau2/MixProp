@@ -53,7 +53,10 @@ def cross_validate(args: TrainArgs,
 
     # Save args
     makedirs(args.save_dir)
-    args.save(os.path.join(args.save_dir, 'args.json'))
+    pickle_args=args
+    pickle_args.configure=None
+    pickle_args.save(os.path.join(args.save_dir, 'args.json'))
+    del pickle_args
 
     # Get data
     debug('Loading data')

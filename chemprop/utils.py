@@ -454,18 +454,17 @@ def save_smiles_splits(data_path: str,
             writer = csv.writer(f)
             writer.writerow(['smiles'])
             for smiles in dataset.smiles():
-                writer.writerow([smiles])
+                writer.writerow([smiles[0]])
 
         with open(os.path.join(save_dir, f'{name}_full.csv'), 'w') as f:
             writer = csv.writer(f)
             writer.writerow(header)
             for smiles in dataset.smiles():
-                print(smiles)
-                writer.writerow(lines_by_smiles[smiles])
+                writer.writerow(lines_by_smiles[smiles[0]])
 
         split_indices = []
         for smiles in dataset.smiles():
-            split_indices.append(indices_by_smiles[smiles])
+            split_indices.append(indices_by_smiles[smiles[0]])
             split_indices = sorted(split_indices)
         all_split_indices.append(split_indices)
 
