@@ -8,7 +8,7 @@ from collections import defaultdict
 import csv
 from shutil import copyfile
 
-from hyperopt import fmin, hp, tpe
+# from hyperopt import fmin, hp, tpe
 import numpy as np
 import ray
 from ray import tune
@@ -34,23 +34,27 @@ from chemprop.data import split_data, get_data, MoleculeDataLoader, set_cache_gr
 
 
 raytune_space = {
-    'hidden_size': tune.quniform(300,2400,100),
-    # 'depth': hp.quniform('depth', low=2, high=6, q=1),
+    'hidden_size': tune.uniform(300,2400),
+    'depth': tune.uniform(2,6),
     'dropout': tune.uniform(0,0.4),
-    # 'ffn_num_layers': hp.quniform('ffn_num_layers', low=1, high=3, q=1),
-    'ffn_hidden_size': tune.quniform(300,2400,100),
-    'max_lr': tune.loguniform(1e-4,1.5e-3),
+    'ffn_num_layers': tune.uniform(1,3),
+    'ffn_hidden_size': tune.uniform(300,2400),
+    'max_lr': tune.loguniform(1e-6,1.5e-3),
+    'init_lr': tune.loguniform(1e-6,1.5e-3),
+    'final_lr': tune.loguniform(1e-6,1.5e-3),
 }
-zoopt_space = {
-    'hidden_size': tune.quniform(300,2400,100),
-    # 'depth': hp.quniform('depth', low=2, high=6, q=1),
+zoopt_space = { #zoopt doesn't accept log uniform
+    'hidden_size': tune.uniform(300,2400),
+    'depth': tune.uniform(2,6),
     'dropout': tune.uniform(0,0.4),
-    # 'ffn_num_layers': hp.quniform('ffn_num_layers', low=1, high=3, q=1),
-    'ffn_hidden_size': tune.quniform(300,2400,100),
-    'max_lr': tune.uniform(1e-4,1.5e-3),
+    'ffn_num_layers': tune.uniform(1,3),
+    'ffn_hidden_size': tune.uniform(300,2400),
+    'max_lr': tune.uniform(1e-6,1.5e-3),
+    'init_lr': tune.uniform(1e-6,1.5e-3),
+    'final_lr': tune.uniform(1e-6,1.5e-3),
 }
 
-INT_KEYS = ['hidden_size','ffn_hidden_size']#, 'depth', 'ffn_num_layers']
+INT_KEYS = ['hidden_size','ffn_hidden_size', 'depth', 'ffn_num_layers']
 
 
 @timeit(logger_name=HYPEROPT_LOGGER_NAME)
@@ -140,10 +144,17 @@ def raytune(args: HyperoptArgs) -> None:
     # Define hyperparameter optimization
     def objective(hyperparams: Dict[str, Union[int, float]]) -> float:
         # For dragonfly
-        # keys=raytune_space.keys()
-        # points=hyperparams['point']
-        # for i,key in enumerate(keys):
-        #     hyperparams[key]=points[i]
+        if args.search_algorithm=='dragonfly':
+            keys=raytune_space.keys()
+            points=hyperparams['point']
+            for i,key in enumerate(keys):
+                hyperparams[key]=points[i]
+
+        #cap init_lr and final_lr at max_lr
+        if hyperparams['max_lr']<hyperparams['final_lr']:
+            hyperparams['final_lr']=hyperparams['max_lr']
+        if hyperparams['max_lr']<hyperparams['init_lr']:
+            hyperparams['init_lr']=hyperparams['max_lr']
 
         # Convert hyperparams from float to int when necessary
         for key in INT_KEYS:
@@ -159,8 +170,6 @@ def raytune(args: HyperoptArgs) -> None:
 
         for key, value in hyperparams.items():
             setattr(hyper_args, key, value)
-
-        hyper_args.ffn_hidden_size = hyper_args.hidden_size
 
         # Record hyperparameters
         logger.info(hyperparams)
@@ -258,19 +267,41 @@ def raytune(args: HyperoptArgs) -> None:
         # tune.report(loss=val2_mean_score)
         # return (1 if hyper_args.minimize_score else -1) * val2_mean_score
         return {'val2_mean':val2_mean_score}
-    ray.init()
-    # algo=HyperOptSearch(metric='val2_mean')
-    # algo=AxSearch(metric='val2_mean')
-    # algo=BayesOptSearch(metric='val2_mean')
-    # algo=OptunaSearch(metric='val2_mean')
-    # algo=DragonflySearch(optimizer='bandit',domain='euclidean',metric='val2_mean')
-    # algo=SkOptSearch(metric='val2_mean')
-    # algo=TuneBOHB(metric='val2_mean')
-    # algo=NevergradSearch(optimizer=ng.optimizers.OnePlusOne)
-    algo=ZOOptSearch(metric='val2_mean',algo='Asracos',budget=args.num_iters,parallel_num=1)
-    algo=ConcurrencyLimiter(algo,max_concurrent=1)
-    # ray_opt=tune.run(objective, config=raytune_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min')
-    zo_opt=tune.run(objective, config=zoopt_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min')
+
+    ray.init(_temp_dir='/tmp/chemprop/ray')
+    if args.search_algorithm=='hyperopt':
+        algo=HyperOptSearch(metric='val2_mean')
+    elif args.search_algorithm=='ax':
+        algo=AxSearch(metric='val2_mean')
+    elif args.search_algorithm=='bayesopt':
+        algo=BayesOptSearch(metric='val2_mean')
+    elif args.search_algorithm=='optuna':
+        algo=OptunaSearch(metric='val2_mean')
+    elif args.search_algorithm=='dragonfly':
+        algo=DragonflySearch(optimizer='bandit',domain='euclidean',metric='val2_mean')
+    elif args.search_algorithm=='skopt':
+        algo=SkOptSearch(metric='val2_mean')
+    elif args.search_algorithm=='bohb':
+        algo=TuneBOHB(metric='val2_mean')
+    elif args.search_algorithm=='nevergrad':
+        algo=NevergradSearch(optimizer=ng.optimizers.OnePlusOne)
+    elif args.search_algorithm=='zoopt':
+        algo=ZOOptSearch(metric='val2_mean',algo='Asracos',budget=args.num_iters,parallel_num=args.max_concurrent)
+    elif args.search_algorithm=='random':
+        pass
+    else:
+        raise ValueError('Search algorithm not supported by hyperparameter_optimization.py')
+
+    if args.search_algorithm!='random':
+        algo=ConcurrencyLimiter(algo,max_concurrent=args.max_concurrent)
+    
+    if args.search_algorithm=='random':
+        rnd_opt=tune.run(objective, config=raytune_space, num_samples=args.num_iters,metric='val2_mean',mode='min')
+    elif args.search_algorithm=='zoopt':
+        zo_opt=tune.run(objective, config=zoopt_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min')
+    else:
+        ray_opt=tune.run(objective, config=raytune_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min')
+
 
     # Report best result
     results = [result for result in results if not np.isnan(result['test_mean_score'])]

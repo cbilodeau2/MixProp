@@ -520,10 +520,14 @@ class HyperoptArgs(TrainArgs):
 
     num_iters: int = 20
     """Number of hyperparameter choices to try."""
+    max_concurrent: int = 4
+    """Maximum number of threads for concurrent hyperparameter trial."""
     config_save_path: str
     """Path to :code:`.json` file where best hyperparameter settings will be written."""
     log_dir: str = None
     """(Optional) Path to a directory where all results of the hyperparameter optimization will be written."""
+    search_algorithm: Literal['random','hyperopt','ax','bayesopt','optuna','dragonfly','skopt','bohb','nevergrad','zoopt' ] = 'hyperopt'
+    """Search program using ray tune."""
 
 
 class SklearnTrainArgs(TrainArgs):
