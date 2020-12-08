@@ -15,7 +15,7 @@ from ray import tune
 from ray.tune.suggest import ConcurrencyLimiter
 from ray.tune.suggest.bayesopt import BayesOptSearch
 from ray.tune.suggest.hyperopt import HyperOptSearch
-from ray.tune.suggest.ax import AxSearch
+# from ray.tune.suggest.ax import AxSearch
 from ray.tune.suggest.optuna import OptunaSearch
 from ray.tune.suggest.dragonfly import DragonflySearch
 from ray.tune.suggest.skopt import SkOptSearch
