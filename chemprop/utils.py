@@ -413,6 +413,7 @@ def timeit(logger_name: str = None) -> Callable[[Callable], Callable]:
 
 def save_smiles_splits(data_path: str,
                        save_dir: str,
+                       features_path: str = None,
                        train_data: MoleculeDataset = None,
                        val_data: MoleculeDataset = None,
                        test_data: MoleculeDataset = None,
@@ -445,6 +446,13 @@ def save_smiles_splits(data_path: str,
             lines_by_smiles[smiles] = line
             indices_by_smiles[smiles] = i
 
+    if features_path is not None:
+        features_header=[]
+        for path in features_path:
+            with open(path,'r') as f:
+                reader=csv.reader(f)
+                features_header.extend(next(reader))
+
     all_split_indices = []
     for dataset, name in [(train_data, 'train'), (val_data, 'val'), (test_data, 'test')]:
         if dataset is None:
@@ -459,8 +467,17 @@ def save_smiles_splits(data_path: str,
         with open(os.path.join(save_dir, f'{name}_full.csv'), 'w') as f:
             writer = csv.writer(f)
             writer.writerow(header)
-            for smiles in dataset.smiles():
-                writer.writerow(lines_by_smiles[smiles[0]])
+            targets=dataset.targets()
+            for i,smiles in enumerate(dataset.smiles()):
+                writer.writerow([smiles[0]]+targets[i])
+        
+        if features_path is not None:
+            with open(os.path.join(save_dir, f'{name}_features.csv'), 'w') as f:
+                writer = csv.writer(f)
+                writer.writerow(features_header)
+                features=dataset.features()
+                for feature_line in features:
+                    writer.writerow(feature_line)
 
         split_indices = []
         for smiles in dataset.smiles():

@@ -23,6 +23,7 @@ from ray.tune.suggest.bohb import TuneBOHB
 from ray.tune.suggest.nevergrad import NevergradSearch
 import nevergrad as ng
 from ray.tune.suggest.zoopt import ZOOptSearch
+from ray.tune.suggest.sigopt import SigOptSearch
 
 from chemprop.args import HyperoptArgs
 from chemprop.constants import HYPEROPT_LOGGER_NAME, TEST_SCORES_FILE_NAME
@@ -53,6 +54,72 @@ zoopt_space = { #zoopt doesn't accept log uniform
     'init_lr': tune.uniform(1e-6,1.5e-3),
     'final_lr': tune.uniform(1e-6,1.5e-3),
 }
+sigopt_space = [
+    {
+        'name':'hidden_size',
+        'type':'int',
+        'bounds':{
+            'min':300,
+            'max':2400
+        }
+    },
+    {
+        'name':'depth',
+        'type':'int',
+        'bounds':{
+            'min':2,
+            'max':6
+        }
+    },
+    {
+        'name':'dropout',
+        'type':'float',
+        'bounds':{
+            'min':0,
+            'max':0.4
+        }
+    },
+    {
+        'name':'ffn_num_layers',
+        'type':'int',
+        'bounds':{
+            'min':1,
+            'max':3
+        }
+    },
+    {
+        'name':'ffn_hidden_size',
+        'type':'int',
+        'bounds':{
+            'min':300,
+            'max':2400
+        }
+    },
+    {
+        'name':'max_log',
+        'type':'float',
+        'bounds':{
+            'min':-6,
+            'max':np.log10(1.5e-3)
+        }
+    },
+    {
+        'name':'final_log',
+        'type':'float',
+        'bounds':{
+            'min':-6,
+            'max':np.log10(1.5e-3)
+        }
+    },
+    {
+        'name':'init_log',
+        'type':'float',
+        'bounds':{
+            'min':-6,
+            'max':np.log10(1.5e-3)
+        }
+    },
+]
 
 INT_KEYS = ['hidden_size','ffn_hidden_size', 'depth', 'ffn_num_layers']
 
@@ -97,8 +164,10 @@ def raytune(args: HyperoptArgs) -> None:
 
         os.rename(os.path.join(args.save_dir,'test_smiles.csv'),os.path.join(args.save_dir, 'val2_smiles.csv'))
         os.rename(os.path.join(args.save_dir,'test_full.csv'),os.path.join(args.save_dir, 'val2_full.csv'))
+        os.rename(os.path.join(args.save_dir,'test_features.csv'),os.path.join(args.save_dir, 'val2_features.csv'))
         os.rename(os.path.join(args.save_dir,'val_smiles.csv'),os.path.join(args.save_dir, 'val1_smiles.csv'))
         os.rename(os.path.join(args.save_dir,'val_full.csv'),os.path.join(args.save_dir, 'val1_full.csv'))
+        os.rename(os.path.join(args.save_dir,'val_features.csv'),os.path.join(args.save_dir, 'val1_features.csv'))
 
         save_smiles_splits(data_path=args.data_path,test_data=test_data,train_data=train_data,val_data=val1_data,save_dir=args.save_dir)
 
@@ -109,6 +178,9 @@ def raytune(args: HyperoptArgs) -> None:
         args.data_path = os.path.join(args.save_dir,'train_full.csv')
         args.separate_val_path = os.path.join(args.save_dir,'val1_full.csv')
         args.separate_test_path = os.path.join(args.save_dir,'val2_full.csv')
+        args.features_path = os.path.join(args.save_dir,'train_features.csv')
+        args.separate_val_features_path = os.path.join(args.save_dir,'val1_features.csv')
+        args.separate_test_features_path = os.path.join(args.save_dir,'val2_features.csv')
     else: #for crossvalidation, where run_training will further split trainval
         trainval_data,val2_data,test_data = split_data(data=data,seed=args.seed,sizes=(0.81,0.09,0.1))
 
@@ -116,13 +188,17 @@ def raytune(args: HyperoptArgs) -> None:
 
         os.rename(os.path.join(args.save_dir,'train_smiles.csv'),os.path.join(args.save_dir, 'trainval_smiles.csv'))
         os.rename(os.path.join(args.save_dir,'train_full.csv'),os.path.join(args.save_dir, 'trainval_full.csv'))
+        os.rename(os.path.join(args.save_dir,'train_features.csv'),os.path.join(args.save_dir, 'trainval_features.csv'))
         os.rename(os.path.join(args.save_dir,'val_smiles.csv'),os.path.join(args.save_dir, 'val2_smiles.csv'))
         os.rename(os.path.join(args.save_dir,'val_full.csv'),os.path.join(args.save_dir, 'val2_full.csv'))
+        os.rename(os.path.join(args.save_dir,'val_features.csv'),os.path.join(args.save_dir, 'val2_features.csv'))
 
         os.remove(os.path.join(args.save_dir,'split_indices.pckl'))
 
         args.data_path = os.path.join(args.save_dir,'trainval_full.csv')
         args.separate_test_path = os.path.join(args.save_dir,'val2_full.csv')
+        args.features_path = os.path.join(args.save_dir,'trainval_features.csv')
+        args.separate_test_features_path = os.path.join(args.save_dir,'val2_features.csv')
 
 
     if len(data) <= args.cache_cutoff:
@@ -149,6 +225,10 @@ def raytune(args: HyperoptArgs) -> None:
             points=hyperparams['point']
             for i,key in enumerate(keys):
                 hyperparams[key]=points[i]
+        if args.search_algorithm=='sigopt':
+            hyperparams['max_lr']=10**hyperparams['max_log']
+            hyperparams['init_lr']=10**hyperparams['init_log']
+            hyperparams['final_lr']=10**hyperparams['final_log']
 
         #cap init_lr and final_lr at max_lr
         if hyperparams['max_lr']<hyperparams['final_lr']:
@@ -271,8 +351,8 @@ def raytune(args: HyperoptArgs) -> None:
     ray.init(_temp_dir='/tmp/chemprop/ray')
     if args.search_algorithm=='hyperopt':
         algo=HyperOptSearch(metric='val2_mean')
-    elif args.search_algorithm=='ax':
-        algo=AxSearch(metric='val2_mean')
+    # elif args.search_algorithm=='ax':
+    #     algo=AxSearch(metric='val2_mean')
     elif args.search_algorithm=='bayesopt':
         algo=BayesOptSearch(metric='val2_mean')
     elif args.search_algorithm=='optuna':
@@ -287,6 +367,8 @@ def raytune(args: HyperoptArgs) -> None:
         algo=NevergradSearch(optimizer=ng.optimizers.OnePlusOne)
     elif args.search_algorithm=='zoopt':
         algo=ZOOptSearch(metric='val2_mean',algo='Asracos',budget=args.num_iters,parallel_num=args.max_concurrent)
+    elif args.search_algorithm=='sigopt':
+        alfo=SigOptSearch(metric='val2_mean',observation_budget=args.num_iters)
     elif args.search_algorithm=='random':
         pass
     else:
@@ -296,11 +378,13 @@ def raytune(args: HyperoptArgs) -> None:
         algo=ConcurrencyLimiter(algo,max_concurrent=args.max_concurrent)
     
     if args.search_algorithm=='random':
-        rnd_opt=tune.run(objective, config=raytune_space, num_samples=args.num_iters,metric='val2_mean',mode='min')
+        rnd_opt=tune.run(objective, config=raytune_space, num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
     elif args.search_algorithm=='zoopt':
-        zo_opt=tune.run(objective, config=zoopt_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min')
+        zo_opt=tune.run(objective, config=zoopt_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
+    elif args.search_algorithm=='sigopt':
+        sig_opt=tune.run(objective,config=sigopt_space,search_alg=algo,num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
     else:
-        ray_opt=tune.run(objective, config=raytune_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min')
+        ray_opt=tune.run(objective, config=raytune_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
 
 
     # Report best result

@@ -70,6 +70,7 @@ def run_training(args: TrainArgs,
     if args.save_smiles_splits:
         save_smiles_splits(
             data_path=args.data_path,
+            features_path=args.features_path,
             save_dir=args.save_dir,
             train_data=train_data,
             val_data=val_data,

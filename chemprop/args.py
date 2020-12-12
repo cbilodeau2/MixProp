@@ -526,7 +526,7 @@ class HyperoptArgs(TrainArgs):
     """Path to :code:`.json` file where best hyperparameter settings will be written."""
     log_dir: str = None
     """(Optional) Path to a directory where all results of the hyperparameter optimization will be written."""
-    search_algorithm: Literal['random','hyperopt','ax','bayesopt','optuna','dragonfly','skopt','bohb','nevergrad','zoopt' ] = 'hyperopt'
+    search_algorithm: Literal['random','hyperopt','ax','bayesopt','optuna','dragonfly','skopt','bohb','nevergrad','zoopt','sigopt' ] = 'hyperopt'
     """Search program using ray tune."""
 
 
