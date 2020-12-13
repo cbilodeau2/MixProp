@@ -160,7 +160,7 @@ def raytune(args: HyperoptArgs) -> None:
 
         val1_data=val2_data
 
-        save_smiles_splits(data_path=args.data_path,test_data=val2_data,train_data=train_data,val_data=val1_data,save_dir=args.save_dir)
+        save_smiles_splits(data_path=args.data_path,features_path=args.features_path,test_data=val2_data,train_data=train_data,val_data=val1_data,save_dir=args.save_dir)
 
         os.rename(os.path.join(args.save_dir,'test_smiles.csv'),os.path.join(args.save_dir, 'val2_smiles.csv'))
         os.rename(os.path.join(args.save_dir,'test_full.csv'),os.path.join(args.save_dir, 'val2_full.csv'))
@@ -169,7 +169,7 @@ def raytune(args: HyperoptArgs) -> None:
         os.rename(os.path.join(args.save_dir,'val_full.csv'),os.path.join(args.save_dir, 'val1_full.csv'))
         os.rename(os.path.join(args.save_dir,'val_features.csv'),os.path.join(args.save_dir, 'val1_features.csv'))
 
-        save_smiles_splits(data_path=args.data_path,test_data=test_data,train_data=train_data,val_data=val1_data,save_dir=args.save_dir)
+        save_smiles_splits(data_path=args.data_path,features_path=args.features_path,test_data=test_data,train_data=train_data,val_data=val1_data,save_dir=args.save_dir)
 
         os.remove(os.path.join(args.save_dir,'val_smiles.csv'))
         os.remove(os.path.join(args.save_dir,'val_full.csv'))
@@ -178,13 +178,13 @@ def raytune(args: HyperoptArgs) -> None:
         args.data_path = os.path.join(args.save_dir,'train_full.csv')
         args.separate_val_path = os.path.join(args.save_dir,'val1_full.csv')
         args.separate_test_path = os.path.join(args.save_dir,'val2_full.csv')
-        args.features_path = os.path.join(args.save_dir,'train_features.csv')
-        args.separate_val_features_path = os.path.join(args.save_dir,'val1_features.csv')
-        args.separate_test_features_path = os.path.join(args.save_dir,'val2_features.csv')
+        args.features_path = [os.path.join(args.save_dir,'train_features.csv')]
+        args.separate_val_features_path = [os.path.join(args.save_dir,'val1_features.csv')]
+        args.separate_test_features_path = [os.path.join(args.save_dir,'val2_features.csv')]
     else: #for crossvalidation, where run_training will further split trainval
         trainval_data,val2_data,test_data = split_data(data=data,seed=args.seed,sizes=(0.81,0.09,0.1))
 
-        save_smiles_splits(data_path=args.data_path,test_data=test_data,train_data=trainval_data,val_data=val2_data,save_dir=args.save_dir)
+        save_smiles_splits(data_path=args.data_path,features_path=args.features_path,test_data=test_data,train_data=trainval_data,val_data=val2_data,save_dir=args.save_dir)
 
         os.rename(os.path.join(args.save_dir,'train_smiles.csv'),os.path.join(args.save_dir, 'trainval_smiles.csv'))
         os.rename(os.path.join(args.save_dir,'train_full.csv'),os.path.join(args.save_dir, 'trainval_full.csv'))
@@ -197,8 +197,8 @@ def raytune(args: HyperoptArgs) -> None:
 
         args.data_path = os.path.join(args.save_dir,'trainval_full.csv')
         args.separate_test_path = os.path.join(args.save_dir,'val2_full.csv')
-        args.features_path = os.path.join(args.save_dir,'trainval_features.csv')
-        args.separate_test_features_path = os.path.join(args.save_dir,'val2_features.csv')
+        args.features_path = [os.path.join(args.save_dir,'trainval_features.csv')]
+        args.separate_test_features_path = [os.path.join(args.save_dir,'val2_features.csv')]
 
 
     if len(data) <= args.cache_cutoff:
@@ -368,7 +368,7 @@ def raytune(args: HyperoptArgs) -> None:
     elif args.search_algorithm=='zoopt':
         algo=ZOOptSearch(metric='val2_mean',algo='Asracos',budget=args.num_iters,parallel_num=args.max_concurrent)
     elif args.search_algorithm=='sigopt':
-        alfo=SigOptSearch(metric='val2_mean',observation_budget=args.num_iters)
+        alfo=SigOptSearch(sigopt_space,metric='val2_mean',observation_budget=args.num_iters)
     elif args.search_algorithm=='random':
         pass
     else:
@@ -382,7 +382,7 @@ def raytune(args: HyperoptArgs) -> None:
     elif args.search_algorithm=='zoopt':
         zo_opt=tune.run(objective, config=zoopt_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
     elif args.search_algorithm=='sigopt':
-        sig_opt=tune.run(objective,config=sigopt_space,search_alg=algo,num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
+        sig_opt=tune.run(objective,search_alg=algo,num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
     else:
         ray_opt=tune.run(objective, config=raytune_space, search_alg=algo, num_samples=args.num_iters,metric='val2_mean',mode='min',resources_per_trial={"cpu": 2, "gpu": 1})
 

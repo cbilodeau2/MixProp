@@ -53,7 +53,7 @@ def load_features(path: str) -> np.ndarray:
         with open(path, 'rb') as f:
             features = np.array([np.squeeze(np.array(feat.todense())) for feat in pickle.load(f)])
     else:
-        raise ValueError(f'Features path extension {extension} not supported.')
+        raise ValueError(f'Features path extension {extension} in path {path} not supported.')
 
     return features
 
