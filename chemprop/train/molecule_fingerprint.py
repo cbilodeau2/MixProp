@@ -97,31 +97,10 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
 
     # Write predictions
     with open(args.preds_path, 'w') as f:
-        # writer = csv.DictWriter(f, fieldnames=full_data[0].row.keys())
         writer = csv.DictWriter(f, fieldnames=args.smiles_columns+fingerprint_columns,extrasaction='ignore')
         writer.writeheader()
-        # writer = csv.writer(f)
-
-        # header = []
-
-        # header.extend(['smiles'])
-        # header.extend(['fp{}'.format(x) for x in range(1,args.hidden_size*args.number_of_molecules+1)])
-
-        # writer.writerow(header)
-
         for datapoint in full_data:
             writer.writerow(datapoint.row)
-            # row = []
-
-            # row.extend(datapoint.smiles)
-
-            # if model_preds[i] is not None:
-            #     row.extend(model_preds[i][:args.hidden_size*args.number_of_molecules])
-            # else:
-            #     row.extend(['Invalid input'] * args.hidden_size*args.number_of_molecules)
-
-            # writer.writerow(row)
-
     return model_preds
 
 def model_fingerprint(model: MoleculeModel,
@@ -130,9 +109,9 @@ def model_fingerprint(model: MoleculeModel,
     """
     Encodes the provided molecules into the latent fingerprint vectors, according to the provided model.
 
-    :param model: A model.
-    :param data: A MoleculeDataset.
-    :param batch_size: Batch size.
+    :param model: A :class:`~chemprop.models.model.MoleculeModel`.
+    :param data_loader: A :class:`~chemprop.data.data.MoleculeDataLoader`.
+    :param disable_progress_bar: Whether to disable the progress bar.
     :return: A list of fingerprint vector lists.
     """
     model.eval()
