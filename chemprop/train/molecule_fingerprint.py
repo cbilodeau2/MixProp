@@ -14,7 +14,7 @@ from chemprop.utils import load_args, load_checkpoint, load_scalers, makedirs, t
 from chemprop.data import MoleculeDataLoader, MoleculeDataset
 from chemprop.models import MoleculeModel
 
-
+@timeit()
 def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> List[List[Optional[float]]]:
     """
     Loads data and a trained model and uses the model to encode fingerprint vectors for the data.
