@@ -1,16 +1,12 @@
 import csv
 from typing import List, Optional, Union
 
-import numpy as np
-import torch
-import torch.nn as nn
 import torch
 from tqdm import tqdm
 
-from .predict import predict
 from chemprop.args import PredictArgs, TrainArgs
 from chemprop.data import get_data, get_data_from_smiles, MoleculeDataLoader, MoleculeDataset
-from chemprop.utils import load_args, load_checkpoint, load_scalers, makedirs, timeit
+from chemprop.utils import load_args, load_checkpoint, makedirs, timeit
 from chemprop.data import MoleculeDataLoader, MoleculeDataset
 from chemprop.models import MoleculeModel
 
