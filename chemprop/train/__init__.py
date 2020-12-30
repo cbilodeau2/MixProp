@@ -13,7 +13,7 @@ __all__ = [
     'evaluate',
     'evaluate_predictions',
     'chemprop_predict',
-    'chemprop_fingerprint'
+    'chemprop_fingerprint',
     'make_predictions',
     'predict',
     'run_training',

@@ -180,7 +180,6 @@ def get_data(path: str,
         max_data_size = max_data_size if max_data_size is not None else args.max_data_size
 
     smiles_columns = preprocess_smiles_columns(smiles_columns)
-
     max_data_size = max_data_size or float('inf')
 
     # Load features
@@ -202,6 +201,7 @@ def get_data(path: str,
         # By default, the SMILES column is the first column
         if None in smiles_columns:
             smiles_columns = columns[:len(smiles_columns)]
+            args.smiles_columns=smiles_columns
 
         # By default, the targets columns are all the columns except the SMILES column
         if target_columns is None:
