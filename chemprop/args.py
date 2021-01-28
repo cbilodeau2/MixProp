@@ -302,6 +302,14 @@ class TrainArgs(CommonArgs):
     """Path to file with features for separate val set."""
     separate_test_features_path: List[str] = None
     """Path to file with features for separate test set."""
+    separate_val_atom_descriptors_path: str = None
+    """Path to file with extra atom descriptors for separate val set."""
+    separate_test_atom_descriptors_path: str = None
+    """Path to file with extra atom descriptors for separate test set."""
+    separate_val_bond_descriptors_path: str = None
+    """Path to file with extra atom descriptors for separate val set."""
+    separate_test_bond_descriptors_path: str = None
+    """Path to file with extra atom descriptors for separate test set."""
     config_path: str = None
     """
     Path to a :code:`.json` file containing arguments. Any arguments present in the config file
