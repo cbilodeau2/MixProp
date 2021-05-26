@@ -54,18 +54,26 @@ def train(model: MoleculeModel,
 
         # Run model
         model.zero_grad()
-        preds = model(mol_batch, features_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch)
+
+        if not args.aleatoric:
+            preds = model(mol_batch, features_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch)
+        else:
+            preds, logvars = model(mol_batch, features_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch)
 
         # Move tensors to correct device
         mask = mask.to(preds.device)
         targets = targets.to(preds.device)
         class_weights = torch.ones(targets.shape, device=preds.device)
 
-        if args.dataset_type == 'multiclass':
-            targets = targets.long()
-            loss = torch.cat([loss_func(preds[:, target_index, :], targets[:, target_index]).unsqueeze(1) for target_index in range(preds.size(1))], dim=1) * class_weights * mask
+        if not args.aleatoric:
+            if args.dataset_type == 'multiclass':
+                targets = targets.long()
+                loss = torch.cat([loss_func(preds[:, target_index, :], targets[:, target_index]).unsqueeze(1) for target_index in range(preds.size(1))], dim=1) * class_weights * mask
+            else:
+                loss = loss_func(preds, targets) * class_weights * mask
         else:
-            loss = loss_func(preds, targets) * class_weights * mask
+            loss = loss_func(targets, preds, logvars) * class_weights * mask
+
         loss = loss.sum() / mask.sum()
 
         loss_sum += loss.item()

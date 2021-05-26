@@ -151,6 +151,8 @@ def run_training(args: TrainArgs,
         sum_test_preds = np.zeros((len(test_smiles), args.num_tasks, args.multiclass_num_classes))
     else:
         sum_test_preds = np.zeros((len(test_smiles), args.num_tasks))
+        if args.aleatoric:
+            sum_test_ale_unc = np.zeros((len(test_smiles), args.num_tasks))
 
     # Automatically determine whether to cache
     if len(data) <= args.cache_cutoff:
@@ -270,22 +272,26 @@ def run_training(args: TrainArgs,
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
         model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger)
 
-        test_preds = predict(
+        test_preds, test_ale_unc = predict(
             model=model,
             data_loader=test_data_loader,
             scaler=scaler
         )
         test_scores = evaluate_predictions(
             preds=test_preds,
+            ale_unc=test_ale_unc,
             targets=test_targets,
             num_tasks=args.num_tasks,
             metrics=args.metrics,
             dataset_type=args.dataset_type,
+            model = model,
             logger=logger
         )
 
         if len(test_preds) != 0:
             sum_test_preds += np.array(test_preds)
+            if args.aleatoric:
+                sum_test_ale_unc += np.array(test_ale_unc)
 
         # Average test score
         for metric, scores in test_scores.items():
@@ -302,13 +308,19 @@ def run_training(args: TrainArgs,
 
     # Evaluate ensemble on test set
     avg_test_preds = (sum_test_preds / args.ensemble_size).tolist()
+    if args.aleatoric:
+        avg_test_ale_unc = (sum_test_ale_unc / args.ensemble_size).tolist()
+    else:
+        avg_test_ale_unc = None
 
     ensemble_scores = evaluate_predictions(
         preds=avg_test_preds,
+        ale_unc=avg_test_ale_unc,
         targets=test_targets,
         num_tasks=args.num_tasks,
         metrics=args.metrics,
         dataset_type=args.dataset_type,
+        model = model,
         logger=logger
     )
 

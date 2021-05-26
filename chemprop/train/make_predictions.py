@@ -71,8 +71,10 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
     # Predict with each model individually and sum predictions
     if args.dataset_type == 'multiclass':
         sum_preds = np.zeros((len(test_data), num_tasks, args.multiclass_num_classes))
+        sum_ale_uncs = np.zeros((len(test_data), num_tasks, args.multiclass_num_classes))
     else:
         sum_preds = np.zeros((len(test_data), num_tasks))
+        sum_ale_uncs = np.zeros((len(test_data), num_tasks))
 
     # Create data loader
     test_data_loader = MoleculeDataLoader(
@@ -102,18 +104,24 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
                 test_data.normalize_features(bond_feature_scaler, scale_bond_features=True)
 
         # Make predictions
-        model_preds = predict(
+        model_preds, ale_uncs = predict(
             model=model,
             data_loader=test_data_loader,
             scaler=scaler
         )
         sum_preds += np.array(model_preds)
+        if ale_uncs is not None:
+            sum_ale_uncs += np.array(ale_uncs)
         if args.ensemble_variance:
             all_preds[:, :, index] = model_preds
 
     # Ensemble predictions
     avg_preds = sum_preds / len(args.checkpoint_paths)
     avg_preds = avg_preds.tolist()
+
+    if args.aleatoric:
+        avg_ale_uncs = sum_ale_uncs / len(args.checkpoint_paths)
+        avg_ale_uncs = avg_ale_uncs.tolist()
 
     if args.ensemble_variance:
         all_epi_uncs = np.var(all_preds, axis=2)
@@ -122,6 +130,8 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
     # Save predictions
     print(f'Saving predictions to {args.preds_path}')
     assert len(test_data) == len(avg_preds)
+    if args.aleatoric:
+        assert len(test_data) == len(avg_ale_uncs)
     if args.ensemble_variance:
         assert len(test_data) == len(all_epi_uncs)
     makedirs(args.preds_path, isfile=True)
@@ -136,6 +146,8 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
     for full_index, datapoint in enumerate(full_data):
         valid_index = full_to_valid_indices.get(full_index, None)
         preds = avg_preds[valid_index] if valid_index is not None else ['Invalid SMILES'] * len(task_names)
+        if args.aleatoric:
+            ale_uncs = avg_ale_uncs[valid_index] if valid_index is not None else ['Invalid SMILES'] * len(task_names)
         if args.ensemble_variance:
             epi_uncs = all_epi_uncs[valid_index] if valid_index is not None else ['Invalid SMILES'] * len(task_names)
 
@@ -149,7 +161,16 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
                 datapoint.row[column] = smiles
 
         # Add predictions columns
-        if args.ensemble_variance:
+        if args.aleatoric and args.ensemble_variance:
+            for pred_name, pred, ale_unc, epi_unc in zip(task_names, preds, ale_uncs, epi_uncs):
+                datapoint.row[pred_name] = pred
+                datapoint.row[pred_name+'_ale_unc'] = ale_unc
+                datapoint.row[pred_name+'_epi_unc'] = epi_unc
+        elif args.aleatoric and not args.ensemble_variance:
+            for pred_name, pred, ale_unc in zip(task_names, preds, ale_uncs):
+                datapoint.row[pred_name] = pred
+                datapoint.row[pred_name+'_ale_unc'] = ale_unc
+        elif not args.aleatoric and args.ensemble_variance:
             for pred_name, pred, epi_unc in zip(task_names, preds, epi_uncs):
                 datapoint.row[pred_name] = pred
                 datapoint.row[pred_name+'_epi_unc'] = epi_unc

@@ -59,7 +59,7 @@ def cross_validate(args: TrainArgs,
     #set explicit H option and reaction option
     set_explicit_h(args.explicit_h)
     set_reaction(args.reaction, args.reaction_mode)
-        
+
     # Get data
     debug('Loading data')
     data = get_data(

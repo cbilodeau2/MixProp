@@ -37,6 +37,8 @@ class MoleculeModel(nn.Module):
         if self.multiclass:
             self.multiclass_softmax = nn.Softmax(dim=2)
 
+        self.aleatoric = args.aleatoric
+
         self.create_encoder(args)
         self.create_ffn(args)
 
@@ -75,9 +77,9 @@ class MoleculeModel(nn.Module):
         # Create FFN layers
         if args.ffn_num_layers == 1:
             ffn = [
-                dropout,
-                nn.Linear(first_linear_dim, self.output_size)
+                dropout
             ]
+            last_linear_dim = first_linear_dim
         else:
             ffn = [
                 dropout,
@@ -91,12 +93,18 @@ class MoleculeModel(nn.Module):
                 ])
             ffn.extend([
                 activation,
-                dropout,
-                nn.Linear(args.ffn_hidden_size, self.output_size),
+                dropout
             ])
+            last_linear_dim = args.ffn_hidden_size
 
         # Create FFN model
-        self.ffn = nn.Sequential(*ffn)
+        self._ffn = nn.Sequential(*ffn)
+
+        if self.aleatoric:
+            self.output_layer = nn.Linear(last_linear_dim, self.output_size)
+            self.logvar_layer = nn.Linear(last_linear_dim, self.output_size)
+        else:
+            self.output_layer = nn.Linear(last_linear_dim, self.output_size)
 
     def featurize(self,
                   batch: Union[List[List[str]], List[List[Chem.Mol]], List[List[Tuple[Chem.Mol, Chem.Mol]]], List[BatchMolGraph]],
@@ -117,7 +125,9 @@ class MoleculeModel(nn.Module):
         :param bond_features_batch: A list of numpy arrays containing additional bond features.
         :return: The feature vectors computed by the :class:`MoleculeModel`.
         """
-        return self.ffn[:-1](self.encoder(batch, features_batch, atom_descriptors_batch,
+        # return self.ffn[:-1](self.encoder(batch, features_batch, atom_descriptors_batch,
+        #                                   atom_features_batch, bond_features_batch))
+        return self._ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
                                           atom_features_batch, bond_features_batch))
 
     def fingerprint(self,
@@ -162,8 +172,15 @@ class MoleculeModel(nn.Module):
             return self.featurize(batch, features_batch, atom_descriptors_batch,
                                   atom_features_batch, bond_features_batch)
 
-        output = self.ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
+        _output = self._ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
                                        atom_features_batch, bond_features_batch))
+        output = self.output_layer(_output)
+
+        if self.aleatoric:
+            logvar = self.logvar_layer(_output)
+
+            # Gaussian uncertainty only for regression, directly returning in this case
+            return output, logvar
 
         # Don't apply sigmoid during training b/c using BCEWithLogitsLoss
         if self.classification and not self.training:

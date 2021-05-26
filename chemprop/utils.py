@@ -200,6 +200,18 @@ def load_task_names(path: str) -> List[str]:
     """
     return load_args(path).task_names
 
+def heteroscedastic_loss(true, mean, log_var):
+    """
+    Compute the heteroscedastic loss for regression.
+
+    :param true: A list of true values.
+    :param mean: A list of means (output predictions).
+    :param log_var: A list of logvars (log of predicted variances).
+    :return: Computed loss.
+    """
+    precision = torch.exp(-log_var)
+    loss = precision * (true - mean)**2 + log_var
+    return loss
 
 def get_loss_func(args: TrainArgs) -> nn.Module:
     """
@@ -210,6 +222,9 @@ def get_loss_func(args: TrainArgs) -> nn.Module:
     """
     if args.dataset_type == 'classification':
         return nn.BCEWithLogitsLoss(reduction='none')
+
+    if args.dataset_type == 'regression' and args.aleatoric:
+        return heteroscedastic_loss
 
     if args.dataset_type == 'regression':
         return nn.MSELoss(reduction='none')
@@ -457,7 +472,7 @@ def save_smiles_splits(data_path: str,
                        smiles_columns: List[str] = None) -> None:
     """
     Saves a csv file with train/val/test splits of target data and additional features.
-    Also saves indices of train/val/test split as a pickle file. Pickle file does not support repeated entries 
+    Also saves indices of train/val/test split as a pickle file. Pickle file does not support repeated entries
     with the same SMILES or entries entered from a path other than the main data path, such as a separate test path.
 
     :param data_path: Path to data CSV file.
@@ -472,7 +487,7 @@ def save_smiles_splits(data_path: str,
     :param logger: A logger for recording output.
     """
     makedirs(save_dir)
-    
+
     info = logger.info if logger is not None else print
     save_split_indices = True
 
@@ -584,7 +599,7 @@ def update_prediction_args(predict_args: PredictArgs,
         for key, value in vars(default_train_args).items():
             if not hasattr(predict_args,key):
                 setattr(predict_args,key,override_defaults.get(key,value))
-    
+
     # Same number of molecules must be used in training as in making predictions
     if train_args.number_of_molecules != predict_args.number_of_molecules:
         raise ValueError('A different number of molecules was used in training '

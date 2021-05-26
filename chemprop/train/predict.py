@@ -23,6 +23,10 @@ def predict(model: MoleculeModel,
     model.eval()
 
     preds = []
+    ale_unc = []
+
+    # if aleatoric uncertainty is enabled
+    aleatoric = model.aleatoric
 
     for batch in tqdm(data_loader, disable=disable_progress_bar, leave=False):
         # Prepare batch
@@ -30,19 +34,43 @@ def predict(model: MoleculeModel,
         mol_batch, features_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch = \
             batch.batch_graph(), batch.features(), batch.atom_descriptors(), batch.atom_features(), batch.bond_features()
 
-        # Make predictions
-        with torch.no_grad():
-            batch_preds = model(mol_batch, features_batch, atom_descriptors_batch,
-                                atom_features_batch, bond_features_batch)
+        if not aleatoric:
+            # Make predictions
+            with torch.no_grad():
+                batch_preds = model(mol_batch, features_batch, atom_descriptors_batch,
+                                    atom_features_batch, bond_features_batch)
 
-        batch_preds = batch_preds.data.cpu().numpy()
+            batch_preds = batch_preds.data.cpu().numpy()
 
-        # Inverse scale if regression
-        if scaler is not None:
-            batch_preds = scaler.inverse_transform(batch_preds)
+            # Inverse scale if regression
+            if scaler is not None:
+                batch_preds = scaler.inverse_transform(batch_preds)
 
-        # Collect vectors
-        batch_preds = batch_preds.tolist()
-        preds.extend(batch_preds)
+            # Collect vectors
+            batch_preds = batch_preds.tolist()
+            preds.extend(batch_preds)
+        else:
+            # Make predictions
+            with torch.no_grad():
+                batch_preds, batch_logvar = model(mol_batch, features_batch,
+                    atom_descriptors_batch, atom_features_batch, bond_features_batch)
+                batch_var = torch.exp(batch_logvar)
 
-    return preds
+            batch_preds = batch_preds.data.cpu().numpy()
+            batch_ale_unc = batch_var.data.cpu().numpy()
+
+            # Inverse scale if regression
+            if scaler is not None:
+                batch_preds = scaler.inverse_transform(batch_preds)
+                batch_ale_unc = scaler.inverse_transform_variance(batch_ale_unc)
+
+            # Collect vectors
+            batch_preds = batch_preds.tolist()
+            batch_ale_unc = batch_ale_unc.tolist()
+            preds.extend(batch_preds)
+            ale_unc.extend(batch_ale_unc)
+
+    if not aleatoric:
+        return preds, None
+    else:
+        return preds, ale_unc

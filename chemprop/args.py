@@ -289,6 +289,8 @@ class TrainArgs(CommonArgs):
     Whether to resume the experiment.
     Loads test results from any folds that have already been completed and skips training those folds.
     """
+    aleatoric: bool = False
+    """Whether to learn the aleatoric uncertainty."""
 
     # Model arguments
     bias: bool = False
@@ -345,8 +347,8 @@ class TrainArgs(CommonArgs):
     """
     Choices for construction of atom and bond features for reactions
     :code:`reac_prod`: concatenates the reactants feature with the products feature.
-    :code:`reac_diff`: concatenates the reactants feature with the difference in features between reactants and products. 
-    :code:`prod_diff`: concatenates the products feature with the difference in features between reactants and products. 
+    :code:`reac_diff`: concatenates the reactants feature with the difference in features between reactants and products.
+    :code:`prod_diff`: concatenates the products feature with the difference in features between reactants and products.
     """
     explicit_h: bool = False
     """
