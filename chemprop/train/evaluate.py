@@ -25,8 +25,8 @@ def evaluate_predictions(preds: List[List[float]],
     :param num_tasks: Number of tasks.
     :param metrics: A list of names of metric functions.
     :param dataset_type: Dataset type.
-    :param logger: A logger to record output.
     :param model: A :class:`~chemprop.models.model.MoleculeModel`.
+    :param logger: A logger to record output.
     :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
     """
     info = logger.info if logger is not None else print
