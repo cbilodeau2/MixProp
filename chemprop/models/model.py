@@ -125,8 +125,6 @@ class MoleculeModel(nn.Module):
         :param bond_features_batch: A list of numpy arrays containing additional bond features.
         :return: The feature vectors computed by the :class:`MoleculeModel`.
         """
-        # return self.ffn[:-1](self.encoder(batch, features_batch, atom_descriptors_batch,
-        #                                   atom_features_batch, bond_features_batch))
         return self._ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
                                           atom_features_batch, bond_features_batch))
 
