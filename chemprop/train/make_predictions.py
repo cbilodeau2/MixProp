@@ -161,22 +161,14 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
                 datapoint.row[column] = smiles
 
         # Add predictions columns
-        if args.aleatoric and args.ensemble_variance:
-            for pred_name, pred, ale_unc, epi_unc in zip(task_names, preds, ale_uncs, epi_uncs):
-                datapoint.row[pred_name] = pred
+        for pred_name, pred in zip(task_names, preds):
+            datapoint.row[pred_name] = pred
+        if args.aleatoric:
+            for pred_name, ale_unc in zip(task_names, ale_uncs):
                 datapoint.row[pred_name+'_ale_unc'] = ale_unc
+        if args.ensemble_variance:
+            for pred_name, epi_unc in zip(task_names, epi_uncs):
                 datapoint.row[pred_name+'_epi_unc'] = epi_unc
-        elif args.aleatoric and not args.ensemble_variance:
-            for pred_name, pred, ale_unc in zip(task_names, preds, ale_uncs):
-                datapoint.row[pred_name] = pred
-                datapoint.row[pred_name+'_ale_unc'] = ale_unc
-        elif not args.aleatoric and args.ensemble_variance:
-            for pred_name, pred, epi_unc in zip(task_names, preds, epi_uncs):
-                datapoint.row[pred_name] = pred
-                datapoint.row[pred_name+'_epi_unc'] = epi_unc
-        else:
-            for pred_name, pred in zip(task_names, preds):
-                datapoint.row[pred_name] = pred
 
     # Save
     with open(args.preds_path, 'w') as f:
