@@ -153,6 +153,9 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
             for pred_name, pred, epi_unc in zip(task_names, preds, epi_uncs):
                 datapoint.row[pred_name] = pred
                 datapoint.row[pred_name+'_epi_unc'] = epi_unc
+        elif args.heteroscedastic_regression:
+            for pred_name, pred in zip(task_names,preds):
+                datapoint.row[pred_name +'_hs_var'] = pred
         else:
             for pred_name, pred in zip(task_names, preds):
                 datapoint.row[pred_name] = pred

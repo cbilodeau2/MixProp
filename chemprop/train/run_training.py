@@ -52,6 +52,7 @@ def run_training(args: TrainArgs,
                              atom_descriptors_path=args.separate_test_atom_descriptors_path,
                              bond_features_path=args.separate_test_bond_features_path,
                              smiles_columns=args.smiles_columns,
+                             preds_path=args.separate_test_preds_path,
                              logger=logger)
     if args.separate_val_path:
         val_data = get_data(path=args.separate_val_path,
@@ -59,7 +60,8 @@ def run_training(args: TrainArgs,
                             features_path=args.separate_val_features_path,
                             atom_descriptors_path=args.separate_val_atom_descriptors_path,
                             bond_features_path=args.separate_val_bond_features_path,
-                            smiles_columns = args.smiles_columns,
+                            smiles_columns=args.smiles_columns,
+                            preds_path=args.separate_val_preds_path,
                             logger=logger)
 
     if args.separate_val_path and args.separate_test_path:
@@ -136,7 +138,7 @@ def run_training(args: TrainArgs,
           f'train size = {len(train_data):,} | val size = {len(val_data):,} | test size = {len(test_data):,}')
 
     # Initialize scaler and scale training targets by subtracting mean and dividing standard deviation (regression only)
-    if args.dataset_type == 'regression':
+    if args.dataset_type == 'regression' and not args.heteroscedastic_regression:
         debug('Fitting scaler')
         scaler = train_data.normalize_targets()
     else:
@@ -147,6 +149,10 @@ def run_training(args: TrainArgs,
 
     # Set up test set evaluation
     test_smiles, test_targets = test_data.smiles(), test_data.targets()
+    if args.heteroscedastic_regression:
+        test_previousmodel_preds = test_data.preds()
+    else:
+        test_previousmodel_preds = None
     if args.dataset_type == 'multiclass':
         sum_test_preds = np.zeros((len(test_smiles), args.num_tasks, args.multiclass_num_classes))
     else:
@@ -292,6 +298,8 @@ def run_training(args: TrainArgs,
             num_tasks=args.num_tasks,
             metrics=args.metrics,
             dataset_type=args.dataset_type,
+            heteroscedastic=args.heteroscedastic_regression,
+            previousmodel_preds=test_previousmodel_preds,
             logger=logger
         )
 
@@ -320,6 +328,8 @@ def run_training(args: TrainArgs,
         num_tasks=args.num_tasks,
         metrics=args.metrics,
         dataset_type=args.dataset_type,
+        heteroscedastic=args.heteroscedastic_regression,
+        previousmodel_preds=test_previousmodel_preds,
         logger=logger
     )
 

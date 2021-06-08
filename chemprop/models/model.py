@@ -26,6 +26,7 @@ class MoleculeModel(nn.Module):
         self.classification = args.dataset_type == 'classification'
         self.multiclass = args.dataset_type == 'multiclass'
         self.featurizer = featurizer
+        self.heteroscedastic = args.heteroscedastic_regression
 
         self.output_size = args.num_tasks
         if self.multiclass:

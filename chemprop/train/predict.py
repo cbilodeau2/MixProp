@@ -34,6 +34,8 @@ def predict(model: MoleculeModel,
         with torch.no_grad():
             batch_preds = model(mol_batch, features_batch, atom_descriptors_batch,
                                 atom_features_batch, bond_features_batch)
+            if model.heteroscedastic: # models for heteroscedastic parameters are trained for log(var) but would like to output var
+                batch_preds = torch.exp(batch_preds)
 
         batch_preds = batch_preds.data.cpu().numpy()
 

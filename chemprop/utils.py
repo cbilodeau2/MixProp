@@ -18,6 +18,7 @@ import torch.nn as nn
 from torch.optim import Adam, Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from tqdm import tqdm
+import numpy as np
 
 from chemprop.args import PredictArgs, TrainArgs
 from chemprop.data import StandardScaler, MoleculeDataset, preprocess_smiles_columns, get_task_names
@@ -321,6 +322,24 @@ def load_task_names(path: str) -> List[str]:
     return load_args(path).task_names
 
 
+def heteroscedastic_loss(targets: Union[List[float],torch.Tensor], preds: Union[List[float],torch.Tensor], log_vars: Union[List[float],torch.Tensor], torch_device: str = 'cpu'):
+    """
+    Compute the heteroscedastic loss for regression.
+
+    :param true: A list of true values.
+    :param mean: A list of means (output predictions).
+    :param log_var: A list of logvars (log of predicted variances).
+    :return: Computed loss.
+    """
+    if not isinstance(targets,torch.Tensor):
+        targets=torch.tensor(targets, device = torch_device)
+    if not isinstance(preds,torch.Tensor):
+        preds=torch.tensor(preds, device = torch_device)
+    if not isinstance(log_vars,torch.Tensor):
+        log_vars=torch.tensor(log_vars, device = torch_device)
+    return torch.exp(-log_vars) * torch.square(targets - preds) + log_vars
+
+
 def get_loss_func(args: TrainArgs) -> nn.Module:
     """
     Gets the loss function corresponding to a given dataset type.
@@ -330,6 +349,9 @@ def get_loss_func(args: TrainArgs) -> nn.Module:
     """
     if args.dataset_type == 'classification':
         return nn.BCEWithLogitsLoss(reduction='none')
+
+    if args.dataset_type == 'regression' and args.heteroscedastic_regression:
+        return heteroscedastic_loss
 
     if args.dataset_type == 'regression':
         return nn.MSELoss(reduction='none')
@@ -408,6 +430,22 @@ def accuracy(targets: List[int], preds: Union[List[float], List[List[float]]], t
     return accuracy_score(targets, hard_preds)
 
 
+def heteroscedastic_metric(targets: List[float], preds: List[float], var: List[float]):
+    """
+    Compute the heteroscedastic loss for regression.
+
+    :param true: A list of true values.
+    :param mean: A list of means (output predictions).
+    :param log_var: A list of logvars (log of predicted variances).
+    :return: Computed loss.
+    """
+    var=np.array(var)
+    targets=np.array(targets)
+    preds=np.array(preds)
+
+    return np.mean(np.square(targets - preds)/var + np.log(var))
+
+
 def get_metric_func(metric: str) -> Callable[[Union[List[int], List[float]], List[float]], float]:
     r"""
     Gets the metric function corresponding to a given metric name.
@@ -453,6 +491,9 @@ def get_metric_func(metric: str) -> Callable[[Union[List[int], List[float]], Lis
 
     if metric == 'binary_cross_entropy':
         return bce
+    
+    if metric == 'heteroscedastic':
+        return heteroscedastic_metric
 
     raise ValueError(f'Metric "{metric}" not supported.')
 

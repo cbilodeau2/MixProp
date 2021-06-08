@@ -58,14 +58,15 @@ class MoleculeDatapoint:
                  smiles: List[str],
                  targets: List[Optional[float]] = None,
                  row: OrderedDict = None,
-                 data_weight: float = 1,
+                 data_weight: float = None,
                  features: np.ndarray = None,
                  features_generator: List[str] = None,
                  atom_features: np.ndarray = None,
                  atom_descriptors: np.ndarray = None,
                  bond_features: np.ndarray = None,
                  overwrite_default_atom_features: bool = False,
-                 overwrite_default_bond_features: bool = False):
+                 overwrite_default_bond_features: bool = False,
+                 preds: List[float] = None):
         """
         :param smiles: A list of the SMILES strings for the molecules.
         :param targets: A list of targets for the molecule (contains None for unknown target values).
@@ -77,6 +78,7 @@ class MoleculeDatapoint:
         :param bond_features: A numpy array containing additional bond features to featurize the molecule
         :param overwrite_default_atom_features: Boolean to overwrite default atom features by atom_features
         :param overwrite_default_bond_features: Boolean to overwrite default bond features by bond_features
+        ;param preds: A list of previous model predictions corresponding to the targets, used in heteroscedastic regression.
 
         """
         if features is not None and features_generator is not None:
@@ -95,6 +97,7 @@ class MoleculeDatapoint:
         self.overwrite_default_bond_features = overwrite_default_bond_features
         self.is_reaction = is_reaction()
         self.is_explicit_h = is_explicit_h()
+        self.preds = preds
         
 
         # Generate additional features if given a generator
@@ -360,7 +363,7 @@ class MoleculeDataset(Dataset):
         """
         Returns the loss weighting associated with each molecule
         """
-        return [d.data_weight for d in self._data]
+        return [d.data_weight if d.data_weight is not None else 1. for d in self._data]
 
     def targets(self) -> List[List[Optional[float]]]:
         """
@@ -369,6 +372,14 @@ class MoleculeDataset(Dataset):
         :return: A list of lists of floats (or None) containing the targets.
         """
         return [d.targets for d in self._data]
+    
+    def preds(self) -> List[List[float]]:
+        """
+        Returns the previous model predictions associated with each molecule. Used with heteroscedastic regression.
+
+        :return: A list of lists of floats containing prediction values.
+        """
+        return [d.preds for d in self._data]
 
     def num_tasks(self) -> int:
         """
@@ -657,6 +668,18 @@ class MoleculeDataLoader(DataLoader):
             raise ValueError('Cannot safely extract targets when class balance or shuffle are enabled.')
 
         return [self._dataset[index].targets for index in self._sampler]
+
+    @property
+    def preds(self) -> List[List[Optional[float]]]:
+        """
+        Returns the previous model predictions associated with each molecule. Used for heteroscedastic regression.
+
+        :return: A list of lists of floats (or None) containing the previous model predictions.
+        """
+        if self._class_balance or self._shuffle:
+            raise ValueError('Cannot safely extract preds when class balance or shuffle are enabled.')
+
+        return [self._dataset[index].preds for index in self._sampler]
 
     @property
     def iter_size(self) -> int:

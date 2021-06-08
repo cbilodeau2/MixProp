@@ -177,6 +177,7 @@ def get_data(path: str,
              max_data_size: int = None,
              store_row: bool = False,
              logger: Logger = None,
+             preds_path: str = None,
              skip_none_targets: bool = False) -> MoleculeDataset:
     """
     Gets SMILES and target values from a CSV file.
@@ -201,6 +202,7 @@ def get_data(path: str,
     :param store_row: Whether to store the raw CSV row in each :class:`~chemprop.data.data.MoleculeDatapoint`.
     :param skip_none_targets: Whether to skip targets that are all 'None'. This is mostly relevant when --target_columns
                               are passed in, so only a subset of tasks are examined.
+    ;param preds_path: Previous model predictions used in loss calculations if performing a heteroscedastic regression.
     :return: A :class:`~chemprop.data.MoleculeDataset` containing SMILES and target values along
              with other info such as additional features when desired.
     """
@@ -240,20 +242,34 @@ def get_data(path: str,
     else:
         data_weights = None
 
+    # Set target columns. By default, the targets columns are all the columns except the SMILES columns.
+    if target_columns is None:
+        target_columns = get_task_names(
+            path=path,
+            smiles_columns=smiles_columns,
+            target_columns=target_columns,
+            ignore_columns=ignore_columns,
+        )
+
+    # Load preds for heteroscedastic regression
+    if preds_path is not None:
+        preds_header=get_header(preds_path)
+        if not all([column in preds_header for column in target_columns]):
+            raise ValueError('The preds file must contain columns that match the name of the data file target columns')
+        preds_data=[]
+        with open(preds_path) as f:
+            reader = csv.DictReader(f)
+            for i, row in enumerate(tqdm(reader)):
+                preds = [float(row[column]) for column in target_columns]
+                preds_data.append(preds)
+    else:
+        preds_data = None
+
     # Load data
     with open(path) as f:
         reader = csv.DictReader(f)
 
-        # By default, the targets columns are all the columns except the SMILES column
-        if target_columns is None:
-            target_columns = get_task_names(
-                path=path,
-                smiles_columns=smiles_columns,
-                target_columns=target_columns,
-                ignore_columns=ignore_columns,
-            )
-
-        all_smiles, all_targets, all_rows, all_features, all_weights = [], [], [], [], []
+        all_smiles, all_targets, all_rows, all_features, all_weights, all_preds = [], [], [], [], [], []
         for i, row in enumerate(tqdm(reader)):
             smiles = [row[c] for c in smiles_columns]
 
@@ -271,6 +287,9 @@ def get_data(path: str,
 
             if data_weights is not None:
                 all_weights.append(data_weights[i])
+
+            if preds_data is not None:
+                all_preds.append(preds_data[i])
 
             if store_row:
                 all_rows.append(row)
@@ -303,14 +322,15 @@ def get_data(path: str,
                 smiles=smiles,
                 targets=targets,
                 row=all_rows[i] if store_row else None,
-                data_weight=all_weights[i] if data_weights is not None else 1.,
+                data_weight=all_weights[i] if data_weights is not None else None,
                 features_generator=features_generator,
                 features=all_features[i] if features_data is not None else None,
                 atom_features=atom_features[i] if atom_features is not None else None,
                 atom_descriptors=atom_descriptors[i] if atom_descriptors is not None else None,
                 bond_features=bond_features[i] if bond_features is not None else None,
                 overwrite_default_atom_features=args.overwrite_default_atom_features if args is not None else False,
-                overwrite_default_bond_features=args.overwrite_default_bond_features if args is not None else False
+                overwrite_default_bond_features=args.overwrite_default_bond_features if args is not None else False,
+                preds=all_preds[i] if preds_data is not None else None,
             ) for i, (smiles, targets) in tqdm(enumerate(zip(all_smiles, all_targets)),
                                                total=len(all_smiles))
         ])

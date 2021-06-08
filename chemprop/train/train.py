@@ -1,3 +1,4 @@
+from chemprop.utils import heteroscedastic_loss
 import logging
 from typing import Callable
 
@@ -48,6 +49,8 @@ def train(model: MoleculeModel,
         mol_batch, features_batch, target_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch, data_weights_batch = \
             batch.batch_graph(), batch.features(), batch.targets(), batch.atom_descriptors(), \
             batch.atom_features(), batch.bond_features(), batch.data_weights()
+        if args.heteroscedastic_regression:
+            previousmodel_preds = batch.preds()
 
         mask = torch.Tensor([[x is not None for x in tb] for tb in target_batch])
         targets = torch.Tensor([[0 if x is None else x for x in tb] for tb in target_batch])
@@ -57,6 +60,8 @@ def train(model: MoleculeModel,
         else:
             target_weights = torch.ones_like(targets)
         data_weights = torch.Tensor(data_weights_batch).unsqueeze(1)
+        if args.heteroscedastic_regression:
+            previousmodel_preds = torch.Tensor(previousmodel_preds)
 
         # Run model
         model.zero_grad()
@@ -67,10 +72,15 @@ def train(model: MoleculeModel,
         targets = targets.to(preds.device)
         target_weights = target_weights.to(preds.device)
         data_weights = data_weights.to(preds.device)
+        if args.heteroscedastic_regression:
+            previousmodel_preds = previousmodel_preds.to(preds.device)
 
+        # Calculate loss
         if args.dataset_type == 'multiclass':
             targets = targets.long()
             loss = torch.cat([loss_func(preds[:, target_index, :], targets[:, target_index]).unsqueeze(1) for target_index in range(preds.size(1))], dim=1) * target_weights * data_weights * mask
+        elif args.heteroscedastic_regression:
+            loss = loss_func(targets,previousmodel_preds,preds) * target_weights * data_weights * mask
         else:
             loss = loss_func(preds, targets) * target_weights * data_weights * mask
         loss = loss.sum() / mask.sum()

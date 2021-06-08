@@ -66,6 +66,7 @@ def cross_validate(args: TrainArgs,
         path=args.data_path,
         args=args,
         smiles_columns=args.smiles_columns,
+        preds_path=args.data_preds_path,
         logger=logger,
         skip_none_targets=True
     )

@@ -13,6 +13,8 @@ def evaluate_predictions(preds: List[List[float]],
                          num_tasks: int,
                          metrics: List[str],
                          dataset_type: str,
+                         heteroscedastic: bool = False,
+                         previousmodel_preds: List[List[float]] = None,
                          logger: logging.Logger = None) -> Dict[str, List[float]]:
     """
     Evaluates predictions using a metric function after filtering out invalid targets.
@@ -22,6 +24,8 @@ def evaluate_predictions(preds: List[List[float]],
     :param num_tasks: Number of tasks.
     :param metrics: A list of names of metric functions.
     :param dataset_type: Dataset type.
+    :param heteroscedastic: Whether model is being trained for heteroscedastic parameters on previous model predicitons.
+    :param previousmodel_preds: A list of predictions from a previous model corresponding to the targets, used in heteroscedastic regression.
     :param logger: A logger to record output.
     :return: A dictionary mapping each metric in :code:`metrics` to a list of values for each task.
     """
@@ -36,11 +40,15 @@ def evaluate_predictions(preds: List[List[float]],
     # valid_preds and valid_targets have shape (num_tasks, data_size)
     valid_preds = [[] for _ in range(num_tasks)]
     valid_targets = [[] for _ in range(num_tasks)]
+    if heteroscedastic:
+        valid_previousmodel_preds = [[] for _ in range(num_tasks)]
     for i in range(num_tasks):
         for j in range(len(preds)):
             if targets[j][i] is not None:  # Skip those without targets
                 valid_preds[i].append(preds[j][i])
                 valid_targets[i].append(targets[j][i])
+                if heteroscedastic:
+                    valid_previousmodel_preds[i].append(previousmodel_preds[j][i])
 
     # Compute metric
     results = defaultdict(list)
@@ -67,6 +75,8 @@ def evaluate_predictions(preds: List[List[float]],
             if dataset_type == 'multiclass' and metric == 'cross_entropy':
                 results[metric].append(metric_func(valid_targets[i], valid_preds[i],
                                                    labels=list(range(len(valid_preds[i][0])))))
+            elif heteroscedastic:
+                results[metric].append(metric_func(valid_targets[i], valid_previousmodel_preds[i], valid_preds[i]))
             else:
                 results[metric].append(metric_func(valid_targets[i], valid_preds[i]))
 
@@ -104,6 +114,8 @@ def evaluate(model: MoleculeModel,
     results = evaluate_predictions(
         preds=preds,
         targets=data_loader.targets,
+        heteroscedastic=model.heteroscedastic,
+        previousmodel_preds=data_loader.preds if model.heteroscedastic else None,
         num_tasks=num_tasks,
         metrics=metrics,
         dataset_type=dataset_type,

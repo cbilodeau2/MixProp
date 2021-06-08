@@ -229,10 +229,24 @@ class TrainArgs(CommonArgs):
     """Type of dataset. This determines the loss function used during training."""
     multiclass_num_classes: int = 3
     """Number of classes when running multiclass classification."""
+    heteroscedastic_regression: bool = False
+    """
+    Argument for whether to do a special kind of regression training for the likely magnitude of error for a previous model instead of the target value.
+    Choosing this option requires providing additional data for the data predictions made by the previous model. Also sets loss and metric functions to heteroscedastic.
+    """
     separate_val_path: str = None
     """Path to separate val set, optional."""
     separate_test_path: str = None
     """Path to separate test set, optional."""
+    data_preds_path: str = None
+    """
+    For use with heteroscedastic_regression. Path to a data file containing the prediction output from a previous model for the data in data_path, 
+    still in default prediction formatting. Target column names in the files must match.
+    """
+    separate_val_preds_path: str = None
+    """For use with heteroscedastic_regression. Path to a data file containing the prediction output from a previous model for the data in separate_val_path"""
+    separate_test_preds_path: str = None
+    """For use with heteroscedastic_regression. Path to a data file containing the prediction output from a previous model for the data in separate_test_path"""
     data_weights_path: str = None
     """Path to weights for each molecule in the training data, affecting the relative weight of molecules in the loss function"""
     target_weights: List[float] = None
@@ -255,7 +269,7 @@ class TrainArgs(CommonArgs):
     """Indices of files to use as train/val/test. Overrides :code:`--num_folds` and :code:`--seed`."""
     seed: int = 0
     """
-    Random seed to use when splitting data into train/val/test sets.
+    Random seed to use when splitting data into train/val/test sets and when setting the training order for data.
     When :code`num_folds > 1`, the first fold uses this seed and all subsequent folds add 1 to the seed.
     """
     pytorch_seed: int = 0
@@ -518,6 +532,8 @@ class TrainArgs(CommonArgs):
                 self.metric = 'auc'
             elif self.dataset_type == 'multiclass':
                 self.metric = 'cross_entropy'
+            elif self.dataset_type == 'regression' and self.heteroscedastic_regression:
+                self.metric = 'heteroscedastic'
             else:
                 self.metric = 'rmse'
 
@@ -527,7 +543,7 @@ class TrainArgs(CommonArgs):
 
         for metric in self.metrics:
             if not ((self.dataset_type == 'classification' and metric in ['auc', 'prc-auc', 'accuracy', 'binary_cross_entropy']) or
-                    (self.dataset_type == 'regression' and metric in ['rmse', 'mae', 'mse', 'r2']) or
+                    (self.dataset_type == 'regression' and metric in ['rmse', 'mae', 'mse', 'r2','heteroscedastic']) or
                     (self.dataset_type == 'multiclass' and metric in ['cross_entropy', 'accuracy'])):
                 raise ValueError(f'Metric "{metric}" invalid for dataset type "{self.dataset_type}".')
 
@@ -600,6 +616,17 @@ class TrainArgs(CommonArgs):
 
         if not self.bond_feature_scaling and self.bond_features_path is None:
             raise ValueError('Bond descriptor scaling is only possible if additional bond features are provided.')
+        
+        # validate preds files present if using heteroscedastic_regression
+        if self.heteroscedastic_regression:
+            if self.dataset_type != 'regression':
+                raise ValueError('Heteroscedastic regression is only supported for regression jobs')
+            if not all([
+                self.data_preds_path is not None,
+                (self.separate_test_path is None) == (self.separate_test_preds_path is None),
+                (self.separate_val_path is None) == (self.separate_val_preds_path is None),
+            ]):
+                raise ValueError('Heteroscedastic regression requires a preds path corresponding to every provided data path.')
 
 
 class PredictArgs(CommonArgs):
