@@ -255,7 +255,7 @@ def get_data(path: str,
     if preds_path is not None:
         preds_header=get_header(preds_path)
         if not all([column in preds_header for column in target_columns]):
-            raise ValueError('The preds file must contain columns that match the name of the data file target columns')
+            raise ValueError(f'The preds file must contain columns that match the name of the data file target columns.')
         preds_data=[]
         with open(preds_path) as f:
             reader = csv.DictReader(f)
@@ -296,6 +296,7 @@ def get_data(path: str,
 
             if len(all_smiles) >= max_data_size:
                 break
+        len_data = i + 1
 
         atom_features = None
         atom_descriptors = None
@@ -316,6 +317,18 @@ def get_data(path: str,
                 bond_features = load_valid_atom_or_bond_features(bond_features_path, [x[0] for x in all_smiles])
             except Exception as e:
                 raise ValueError(f'Failed to load or validate custom bond features: {e}')
+
+        # Raise Errors if secondary data are of different length than the main data
+        for secondary_data, secondary_label in [
+            (data_weights,'data weights'),
+            (features_data,'molecular features'),
+            (atom_features,'atom features'),
+            (atom_descriptors,'atom descriptors'),
+            (bond_features,'bond features'),
+            (preds_data,'previous model predictions')
+        ]:
+            if secondary_data is not None and len(secondary_data) != len_data:
+                raise ValueError(f'The length of {secondary_label} must be equal to the length of the main data.')
 
         data = MoleculeDataset([
             MoleculeDatapoint(
