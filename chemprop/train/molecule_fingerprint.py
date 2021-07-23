@@ -2,6 +2,7 @@ import csv
 from typing import List, Optional, Union
 
 import torch
+import numpy as np
 from tqdm import tqdm
 
 from chemprop.args import PredictArgs, TrainArgs
@@ -68,41 +69,52 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
     )
 
     # Load model
-    print(f'Encoding smiles into a fingerprint vector from a single model')
-    if len(args.checkpoint_paths) != 1:
-        raise ValueError("Fingerprint generation only supports one model, cannot use an ensemble")
+    print(f'Encoding smiles into a fingerprint vector from {len(args.checkpoint_paths)} models.')
 
-    model = load_checkpoint(args.checkpoint_paths[0], device=args.device)
-    scaler, features_scaler, atom_descriptor_scaler, bond_feature_scaler = load_scalers(args.checkpoint_paths[0])
+    total_hidden_size = args.hidden_size * args.number_of_molecules
+    all_fingerprints = np.zeros((len(test_data), total_hidden_size, len(args.checkpoint_paths)))
 
-    # Normalize features
-    if args.features_scaling or train_args.atom_descriptor_scaling or train_args.bond_feature_scaling:
-        test_data.reset_features_and_targets()
-        if args.features_scaling:
-            test_data.normalize_features(features_scaler)
-        if train_args.atom_descriptor_scaling and args.atom_descriptors is not None:
-            test_data.normalize_features(atom_descriptor_scaler, scale_atom_descriptors=True)
-        if train_args.bond_feature_scaling and args.bond_features_size > 0:
-            test_data.normalize_features(bond_feature_scaler, scale_bond_features=True)
+    for index, checkpoint_path in enumerate(tqdm(args.checkpoint_paths, total=len(args.checkpoint_paths))):
+        model = load_checkpoint(checkpoint_path, device=args.device)
+        scaler, features_scaler, atom_descriptor_scaler, bond_feature_scaler = load_scalers(args.checkpoint_paths[0])
 
-    # Make fingerprints
-    model_preds = model_fingerprint(
-        model=model,
-        data_loader=test_data_loader
-    )
+        # Normalize features
+        if args.features_scaling or train_args.atom_descriptor_scaling or train_args.bond_feature_scaling:
+            test_data.reset_features_and_targets()
+            if args.features_scaling:
+                test_data.normalize_features(features_scaler)
+            if train_args.atom_descriptor_scaling and args.atom_descriptors is not None:
+                test_data.normalize_features(atom_descriptor_scaler, scale_atom_descriptors=True)
+            if train_args.bond_feature_scaling and args.bond_features_size > 0:
+                test_data.normalize_features(bond_feature_scaler, scale_bond_features=True)
+
+        # Make fingerprints
+        model_fp = model_fingerprint(
+            model=model,
+            data_loader=test_data_loader
+        )
+        all_fingerprints[:,:,index] = model_fp
 
     # Save predictions
     print(f'Saving predictions to {args.preds_path}')
-    assert len(test_data) == len(model_preds)
+    assert len(test_data) == len(all_fingerprints)
     makedirs(args.preds_path, isfile=True)
 
+    # Set column names
+    fingerprint_columns = []
+    if len(args.checkpoint_paths) == 1:
+        for j in range(total_hidden_size):
+            fingerprint_columns.append(f'fp_{j}')
+    else:
+        for j in range(total_hidden_size):
+            for i in range(len(args.checkpoint_paths)):
+                fingerprint_columns.append(f'fp_{j}_model_{i}')
+
     # Copy predictions over to full_data
-    total_hidden_size = args.hidden_size * args.number_of_molecules
     for full_index, datapoint in enumerate(full_data):
         valid_index = full_to_valid_indices.get(full_index, None)
-        preds = model_preds[valid_index] if valid_index is not None else ['Invalid SMILES'] * total_hidden_size
+        preds = all_fingerprints[valid_index].reshape((len(args.checkpoint_paths) * total_hidden_size)) if valid_index is not None else ['Invalid SMILES'] * len(args.checkpoint_paths) * total_hidden_size
 
-        fingerprint_columns=[f'fp_{i}' for i in range(total_hidden_size)]
         for i in range(len(fingerprint_columns)):
             datapoint.row[fingerprint_columns[i]] = preds[i]
 
@@ -113,7 +125,7 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
         for datapoint in full_data:
             writer.writerow(datapoint.row)
 
-    return model_preds
+    return all_fingerprints
 
 def model_fingerprint(model: MoleculeModel,
             data_loader: MoleculeDataLoader,
