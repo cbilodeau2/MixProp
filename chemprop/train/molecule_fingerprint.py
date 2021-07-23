@@ -93,7 +93,7 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
             model=model,
             data_loader=test_data_loader
         )
-        all_fingerprints[:,:,index] = model_fp
+        all_fingerprints[:,:,index] = model_fp[:,:total_hidden_size] # truncate features from fingerprint
 
     # Save predictions
     print(f'Saving predictions to {args.preds_path}')
