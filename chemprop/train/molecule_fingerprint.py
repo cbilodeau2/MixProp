@@ -43,7 +43,7 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
         )
     else:
         full_data = get_data(path=args.test_path, smiles_columns=args.smiles_columns, target_columns=[], ignore_columns=[], skip_invalid_smiles=False,
-                             args=args, store_row=True)
+                             args=args, store_row=False)
 
     print('Validating SMILES')
     full_to_valid_indices = {}
@@ -145,11 +145,13 @@ def model_fingerprint(model: MoleculeModel,
     for batch in tqdm(data_loader, disable=disable_progress_bar, leave=False):
         # Prepare batch
         batch: MoleculeDataset
-        mol_batch, features_batch, atom_descriptors_batch = batch.batch_graph(), batch.features(), batch.atom_descriptors()
+        mol_batch, features_batch, atom_descriptors_batch, atom_features_batch, bond_features_batch = \
+            batch.batch_graph(), batch.features(), batch.atom_descriptors(), batch.atom_features(), batch.bond_features()
 
         # Make predictions
         with torch.no_grad():
-            batch_fp = model.fingerprint(mol_batch, features_batch, atom_descriptors_batch)
+            batch_fp = model.fingerprint(mol_batch, features_batch, atom_descriptors_batch,
+                                atom_features_batch, bond_features_batch)
 
         # Collect vectors
         batch_fp = batch_fp.data.cpu().tolist()
