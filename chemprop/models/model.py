@@ -138,7 +138,9 @@ class MoleculeModel(nn.Module):
     def fingerprint(self,
                   batch: Union[List[List[str]], List[List[Chem.Mol]], List[List[Tuple[Chem.Mol, Chem.Mol]]], List[BatchMolGraph]],
                   features_batch: List[np.ndarray] = None,
-                  atom_descriptors_batch: List[np.ndarray] = None) -> torch.FloatTensor:
+                  atom_descriptors_batch: List[np.ndarray] = None,
+                  atom_features_batch: List[np.ndarray] = None,
+                  bond_features_batch: List[np.ndarray] = None) -> torch.FloatTensor:
         """
         Encodes the fingerprint vectors of the input molecules by passing the inputs through the MPNN and returning
         the latent representation before the FFNN.
@@ -151,7 +153,8 @@ class MoleculeModel(nn.Module):
         :param atom_descriptors_batch: A list of numpy arrays containing additional atom descriptors.
         :return: The fingerprint vectors calculated through the MPNN.
         """
-        return self.encoder(batch, features_batch, atom_descriptors_batch)
+        return self.encoder(batch, features_batch, atom_descriptors_batch,
+                                  atom_features_batch, bond_features_batch)
 
     def forward(self,
                 batch: Union[List[List[str]], List[List[Chem.Mol]], List[List[Tuple[Chem.Mol, Chem.Mol]]], List[BatchMolGraph]],
