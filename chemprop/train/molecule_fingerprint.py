@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-from chemprop.args import PredictArgs, TrainArgs
+from chemprop.args import FingerprintArgs, TrainArgs
 from chemprop.data import get_data, get_data_from_smiles, MoleculeDataLoader, MoleculeDataset
 from chemprop.utils import load_args, load_checkpoint, makedirs, timeit, load_scalers, update_prediction_args
 from chemprop.data import MoleculeDataLoader, MoleculeDataset
@@ -13,7 +13,7 @@ from chemprop.features import set_reaction, set_explicit_h
 from chemprop.models import MoleculeModel
 
 @timeit()
-def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> List[List[Optional[float]]]:
+def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) -> List[List[Optional[float]]]:
     """
     Loads data and a trained model and uses the model to encode fingerprint vectors for the data.
 
@@ -28,7 +28,7 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
 
     # Update args with training arguments
     update_prediction_args(predict_args=args, train_args=train_args, validate_feature_sources=False)
-    args: Union[PredictArgs, TrainArgs]
+    args: Union[FingerprintArgs, TrainArgs]
 
     #set explicit H option and reaction option
     set_explicit_h(train_args.explicit_h)
@@ -68,11 +68,22 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
         num_workers=args.num_workers
     )
 
+    # Set fingerprint size
+    if args.fingerprint_type == 'MPN':
+        total_fp_size = args.hidden_size * args.number_of_molecules
+        if args.features_only:
+            raise ValueError('With features_only models, there is no latent MPN representation. Use last_FFN fingerprint type instead.')
+    elif args.fingerprint_type == 'last_FFN':
+        if args.ffn_num_layers != 1:
+            total_fp_size = args.ffn_hidden_size
+        else:
+            raise ValueError('With a ffn_num_layers of 1, there is no latent FFN representation. Use MPN fingerprint type instead.')
+    else:
+        raise ValueError(f'Fingerprint type {args.fingerprint_type} not supported')
+    all_fingerprints = np.zeros((len(test_data), total_fp_size, len(args.checkpoint_paths)))
+
     # Load model
     print(f'Encoding smiles into a fingerprint vector from {len(args.checkpoint_paths)} models.')
-
-    total_hidden_size = args.hidden_size * args.number_of_molecules
-    all_fingerprints = np.zeros((len(test_data), total_hidden_size, len(args.checkpoint_paths)))
 
     for index, checkpoint_path in enumerate(tqdm(args.checkpoint_paths, total=len(args.checkpoint_paths))):
         model = load_checkpoint(checkpoint_path, device=args.device)
@@ -91,9 +102,10 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
         # Make fingerprints
         model_fp = model_fingerprint(
             model=model,
-            data_loader=test_data_loader
+            data_loader=test_data_loader,
+            fingerprint_type=args.fingerprint_type
         )
-        all_fingerprints[:,:,index] = model_fp[:,:total_hidden_size] # truncate features from fingerprint
+        all_fingerprints[:,:,index] = model_fp[:,:total_fp_size] # truncate features from fingerprint
 
     # Save predictions
     print(f'Saving predictions to {args.preds_path}')
@@ -103,17 +115,17 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
     # Set column names
     fingerprint_columns = []
     if len(args.checkpoint_paths) == 1:
-        for j in range(total_hidden_size):
+        for j in range(total_fp_size):
             fingerprint_columns.append(f'fp_{j}')
     else:
-        for j in range(total_hidden_size):
+        for j in range(total_fp_size):
             for i in range(len(args.checkpoint_paths)):
                 fingerprint_columns.append(f'fp_{j}_model_{i}')
 
     # Copy predictions over to full_data
     for full_index, datapoint in enumerate(full_data):
         valid_index = full_to_valid_indices.get(full_index, None)
-        preds = all_fingerprints[valid_index].reshape((len(args.checkpoint_paths) * total_hidden_size)) if valid_index is not None else ['Invalid SMILES'] * len(args.checkpoint_paths) * total_hidden_size
+        preds = all_fingerprints[valid_index].reshape((len(args.checkpoint_paths) * total_fp_size)) if valid_index is not None else ['Invalid SMILES'] * len(args.checkpoint_paths) * total_fp_size
 
         for i in range(len(fingerprint_columns)):
             datapoint.row[fingerprint_columns[i]] = preds[i]
@@ -129,6 +141,7 @@ def molecule_fingerprint(args: PredictArgs, smiles: List[List[str]] = None) -> L
 
 def model_fingerprint(model: MoleculeModel,
             data_loader: MoleculeDataLoader,
+            fingerprint_type: str = 'MPN',
             disable_progress_bar: bool = False) -> List[List[float]]:
     """
     Encodes the provided molecules into the latent fingerprint vectors, according to the provided model.
@@ -151,7 +164,7 @@ def model_fingerprint(model: MoleculeModel,
         # Make predictions
         with torch.no_grad():
             batch_fp = model.fingerprint(mol_batch, features_batch, atom_descriptors_batch,
-                                atom_features_batch, bond_features_batch)
+                                atom_features_batch, bond_features_batch, fingerprint_type)
 
         # Collect vectors
         batch_fp = batch_fp.data.cpu().tolist()
@@ -165,4 +178,4 @@ def chemprop_fingerprint() -> None:
     Parses Chemprop predicting arguments and returns the latent representation vectors for
     provided molecules, according to a previously trained model.
     """
-    molecule_fingerprint(args=PredictArgs().parse_args())
+    molecule_fingerprint(args=FingerprintArgs().parse_args())
