@@ -27,7 +27,11 @@ def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) 
     train_args = load_args(args.checkpoint_paths[0])
 
     # Update args with training arguments
-    update_prediction_args(predict_args=args, train_args=train_args, validate_feature_sources=False)
+    if args.fingerprint_type == 'MPN': # only need to supply input features if using FFN latent representation and if model calls for them.
+        validate_feature_sources = False
+    else:
+        validate_feature_sources = True
+    update_prediction_args(predict_args=args, train_args=train_args, validate_feature_sources=validate_feature_sources)
     args: Union[FingerprintArgs, TrainArgs]
 
     #set explicit H option and reaction option
@@ -43,7 +47,7 @@ def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) 
         )
     else:
         full_data = get_data(path=args.test_path, smiles_columns=args.smiles_columns, target_columns=[], ignore_columns=[], skip_invalid_smiles=False,
-                             args=args, store_row=False)
+                             args=args, store_row=True)
 
     print('Validating SMILES')
     full_to_valid_indices = {}
@@ -105,7 +109,9 @@ def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) 
             data_loader=test_data_loader,
             fingerprint_type=args.fingerprint_type
         )
-        all_fingerprints[:,:,index] = model_fp[:,:total_fp_size] # truncate features from fingerprint
+        if args.fingerprint_type == 'MPN' and (args.features_path is not None or args.features_generator): # truncate any features from MPN fingerprint
+            model_fp = np.array(model_fp)[:,:total_fp_size] 
+        all_fingerprints[:,:,index] = model_fp
 
     # Save predictions
     print(f'Saving predictions to {args.preds_path}')
