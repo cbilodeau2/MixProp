@@ -119,14 +119,6 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
     # Ensemble predictions
     avg_preds = sum_preds / len(args.checkpoint_paths)
 
-    # Reshape multiclass to merge task and class dimension
-    if args.dataset_type == 'multiclass':
-        avg_preds = avg_preds.reshape((len(test_data), num_tasks * args.multiclass_num_classes))
-        if args.ensemble_variance or args. individual_ensemble_predictions:
-            all_preds = all_preds.reshape((len(test_data), num_tasks * args.multiclass_num_classes, len(args.checkpoint_paths)))
-
-    avg_preds = avg_preds.tolist()
-
     if args.ensemble_variance:
         all_epi_uncs = np.var(all_preds, axis=2)
         all_epi_uncs = all_epi_uncs.tolist()
@@ -138,9 +130,10 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
         assert len(test_data) == len(all_epi_uncs)
     makedirs(args.preds_path, isfile=True)
 
-    # Get prediction column names
+    # Set multiclass column names, update num_tasks definition for multiclass
     if args.dataset_type == 'multiclass':
         task_names = [f'{name}_class_{i}' for name in task_names for i in range(args.multiclass_num_classes)]
+        num_tasks = num_tasks * args.multiclass_num_classes
 
     # Copy predictions over to full_data
     for full_index, datapoint in enumerate(full_data):
@@ -150,6 +143,12 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
             epi_uncs = all_epi_uncs[valid_index] if valid_index is not None else ['Invalid SMILES'] * num_tasks
         if args.individual_ensemble_predictions:
             ind_preds = all_preds[valid_index] if valid_index is not None else [['Invalid SMILES'] * len(args.checkpoint_paths)] * num_tasks
+
+        # Reshape multiclass to merge task and class dimension, with updated num_tasks
+        if args.dataset_type == 'multiclass':
+            preds = preds.reshape((num_tasks))
+            if args.ensemble_variance or args. individual_ensemble_predictions:
+                ind_preds = ind_preds.reshape((num_tasks, len(args.checkpoint_paths)))
 
         # If extra columns have been dropped, add back in SMILES columns
         if args.drop_extra_columns:
@@ -179,6 +178,7 @@ def make_predictions(args: PredictArgs, smiles: List[List[str]] = None) -> List[
         for datapoint in full_data:
             writer.writerow(datapoint.row)
 
+    avg_preds = avg_preds.tolist()
     return avg_preds
 
 
