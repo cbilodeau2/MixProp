@@ -314,7 +314,7 @@ To load a trained model and encode the fingerprint latent representation of mole
 * `--preds_path` Path where a CSV file containing the encoded fingerprint vectors will be saved.
 * Any other arguments that you would supply for a prediction, such as atom or bond features.
 
-Latent representations of molecules are taken from intermediate stages of the prediction model. This latent representation can be taken at the output of the MPNN or from the last input layer of the FFNN, specified using `--fingerprint_type <MPN or last_FFN>`. Fingerprint encoding uses the same set of arguments as making predictions. If multiple checkpoint files are supplied through `--checkpoint_dir`, then the fingerprint encodings for each of the models will be provided concatenated together as a longer vector.
+Latent representations of molecules are taken from intermediate stages of the prediction model. This latent representation can be taken at the output of the MPNN (default) nor from the last input layer of the FFNN, specified using `--fingerprint_type <MPN or last_FFN>`. Fingerprint encoding uses the same set of arguments as making predictions. If multiple checkpoint files are supplied through `--checkpoint_dir`, then the fingerprint encodings for each of the models will be provided concatenated together as a longer vector.
 
 Example input:
 ```
