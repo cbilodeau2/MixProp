@@ -1,6 +1,5 @@
 """Script to find the molecules in the training set which are most similar to each molecule in the test set."""
 
-from chemprop.train.molecule_fingerprint import molecule_fingerprint
 from collections import OrderedDict
 import csv
 import os
@@ -74,8 +73,8 @@ def find_similar_mols(test_smiles: List[str],
     print(f'Computing {distance_measure} vectors')
     if distance_measure == 'embedding':
         assert model is not None
-        test_vecs = np.array(molecule_fingerprint(model=model, data_loader=test_data_loader, fingerprint_type='last_FFN'))
-        train_vecs = np.array(molecule_fingerprint(model=model, data_loader=train_data_loader, fingerprint_type='last_FFN'))
+        test_vecs = np.array(model_fingerprint(model=model, data_loader=test_data_loader, fingerprint_type='last_FFN'))
+        train_vecs = np.array(model_fingerprint(model=model, data_loader=train_data_loader, fingerprint_type='last_FFN'))
         metric = 'cosine'
     elif distance_measure == 'morgan':
         test_vecs = np.array([morgan_binary_features_generator(smiles) for smiles in tqdm(test_smiles, total=len(test_smiles))])

@@ -6,9 +6,6 @@ import torch
 import torch.nn as nn
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
-from tqdm import tqdm
-
-from chemprop.data import MoleculeDataLoader, MoleculeDataset
 
 
 def compute_pnorm(model: nn.Module) -> float:
