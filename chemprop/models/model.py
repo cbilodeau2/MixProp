@@ -38,6 +38,7 @@ class MoleculeModel(nn.Module):
             self.multiclass_softmax = nn.Softmax(dim=2)
 
         self.aleatoric = args.aleatoric
+        self.aleatoric_readout = args.aleatoric_readout
 
         self.create_encoder(args)
         self.create_ffn(args)
@@ -108,6 +109,34 @@ class MoleculeModel(nn.Module):
         # Create FFN model
         self._ffn = nn.Sequential(*ffn)
 
+        # Create FFN layers for aleatoric readout if requested
+        if self.aleatoric and self.aleatoric_readout:
+            if args.ffn_num_layers == 1:
+                ffn_aleatoric = [
+                    dropout
+                ]
+                last_linear_dim = first_linear_dim
+            else:
+                ffn_aleatoric = [
+                    dropout,
+                    nn.Linear(first_linear_dim, args.ffn_hidden_size)
+                ]
+                for _ in range(args.ffn_num_layers - 2):
+                    ffn_aleatoric.extend([
+                        activation,
+                        dropout,
+                        nn.Linear(args.ffn_hidden_size, args.ffn_hidden_size),
+                    ])
+                ffn_aleatoric.extend([
+                    activation,
+                    dropout
+                ])
+                last_linear_dim = args.ffn_hidden_size
+
+            # Create FFN model
+            self._ffn_aleatoric = nn.Sequential(*ffn_aleatoric)
+
+        # Note: Make aleatoric readout feature compatible with prior frozen layer features
         if args.checkpoint_frzn is not None:
             if args.frzn_ffn_layers >0:
                 for param in list(self._ffn.parameters())[0:2*args.frzn_ffn_layers]: # Freeze weights and bias for given number of layers
@@ -183,12 +212,17 @@ class MoleculeModel(nn.Module):
             return self.featurize(batch, features_batch, atom_descriptors_batch,
                                   atom_features_batch, bond_features_batch)
 
-        _output = self._ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
-                                       atom_features_batch, bond_features_batch))
+        encoder_output = self.encoder(batch, features_batch, atom_descriptors_batch,
+                                       atom_features_batch, bond_features_batch)
+        _output = self._ffn(encoder_output)
         output = self.output_layer(_output)
 
         if self.aleatoric:
-            logvar = self.logvar_layer(_output)
+            if self.aleatoric_readout:
+                _output_aleatoric = self._ffn_aleatoric(encoder_output)
+                logvar = self.logvar_layer(_output_aleatoric)
+            else:
+                logvar = self.logvar_layer(_output)
 
             # Gaussian uncertainty only for regression, directly returning in this case
             return output, logvar

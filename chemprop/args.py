@@ -297,6 +297,8 @@ class TrainArgs(CommonArgs):
     """
     aleatoric: bool = False
     """Whether to learn the aleatoric uncertainty."""
+    aleatoric_readout: bool = False
+    """Whether to create a seaparate readout FFFNN for the prediction of aleatoric uncertainties."""
 
     # Model arguments
     bias: bool = False
@@ -393,9 +395,9 @@ class TrainArgs(CommonArgs):
     """Turn off atom feature scaling."""
     frzn_ffn_layers: int = 0
     """
-    Overwrites weights for the first n layers of the ffn from checkpoint model (specified checkpoint_frzn), 
+    Overwrites weights for the first n layers of the ffn from checkpoint model (specified checkpoint_frzn),
     where n is specified in the input.
-    Automatically also freezes mpnn weights. 
+    Automatically also freezes mpnn weights.
     """
     freeze_first_only: bool = False
     """
