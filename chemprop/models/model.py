@@ -136,17 +136,20 @@ class MoleculeModel(nn.Module):
             # Create FFN model
             self._ffn_aleatoric = nn.Sequential(*ffn_aleatoric)
 
-        # Note: Make aleatoric readout feature compatible with prior frozen layer features
-        if args.checkpoint_frzn is not None:
-            if args.frzn_ffn_layers >0:
-                for param in list(self._ffn.parameters())[0:2*args.frzn_ffn_layers]: # Freeze weights and bias for given number of layers
-                    param.requires_grad=False
-
         if self.aleatoric:
             self.output_layer = nn.Linear(last_linear_dim, self.output_size)
             self.logvar_layer = nn.Linear(last_linear_dim, self.output_size)
         else:
             self.output_layer = nn.Linear(last_linear_dim, self.output_size)
+
+        # Freeze weights and bias for given number of layers
+        if args.checkpoint_frzn is not None:
+            if args.frzn_ffn_layers > 0:
+                for param in list(self._ffn.parameters())[0:2*args.frzn_ffn_layers]:
+                    param.requires_grad=False
+                if args.frzn_ffn_layers >= args.ffn_num_layers:
+                    for param in list(self.output_layer.parameters()):
+                        param.requires_grad=False
 
     def featurize(self,
                   batch: Union[List[List[str]], List[List[Chem.Mol]], List[List[Tuple[Chem.Mol, Chem.Mol]]], List[BatchMolGraph]],
