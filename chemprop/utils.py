@@ -110,8 +110,8 @@ def load_checkpoint(path: str,
     if args_new is not None: # Extract hard-coded arguments
         args.aleatoric = args_new.aleatoric
         args.aleatoric_readout = args_new.aleatoric_readout
-        # args.checkpoint_frzn = args_new.checkpoint_frzn
-        # args.frzn_ffn_layers = args_new.frzn_ffn_layers
+        args.checkpoint_frzn = args_new.checkpoint_frzn
+        args.frzn_ffn_layers = args_new.frzn_ffn_layers
     loaded_state_dict = state['state_dict']
 
     if device is not None:
