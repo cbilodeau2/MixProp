@@ -198,24 +198,24 @@ def run_training(args: TrainArgs,
         # Load/build model
         if args.checkpoint_paths is not None:
             debug(f'Loading model {model_idx} from {args.checkpoint_paths[model_idx]}')
-            model = load_checkpoint(args.checkpoint_paths[model_idx], logger=logger)
+            model = load_checkpoint(args.checkpoint_paths[model_idx], logger=logger, args_new=args)
         else:
             debug(f'Building model {model_idx}')
             model = MoleculeModel(args)
-            
+
         # Optionally, overwrite weights:
         if args.checkpoint_frzn is not None:
             debug(f'Loading and freezing parameters from {args.checkpoint_frzn}.')
-            model = load_frzn_model(model=model,path=args.checkpoint_frzn, current_args=args, logger=logger)     
-        
+            model = load_frzn_model(model=model,path=args.checkpoint_frzn, current_args=args, logger=logger)
+
         debug(model)
-        
+
         if args.checkpoint_frzn is not None:
             debug(f'Number of unfrozen parameters = {param_count(model):,}')
             debug(f'Total number of parameters = {param_count_all(model):,}')
         else:
             debug(f'Number of parameters = {param_count_all(model):,}')
-        
+
         if args.cuda:
             debug('Moving model to cuda')
         model = model.to(args.device)
@@ -281,13 +281,14 @@ def run_training(args: TrainArgs,
 
         # Evaluate on test set using model with best validation score
         info(f'Model {model_idx} best validation {args.metric} = {best_score:.6f} on epoch {best_epoch}')
-        model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger)
+        model = load_checkpoint(os.path.join(save_dir, MODEL_FILE_NAME), device=args.device, logger=logger, args_new=args)
 
         test_preds, test_ale_unc = predict(
             model=model,
             data_loader=test_data_loader,
             scaler=scaler
         )
+
         test_scores = evaluate_predictions(
             preds=test_preds,
             ale_unc=test_ale_unc,
