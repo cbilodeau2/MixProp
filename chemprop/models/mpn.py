@@ -143,6 +143,12 @@ class MPNEncoder(nn.Module):
                     mol_vec = mol_vec.sum(dim=0)
                 elif self.aggregation == 'norm':
                     mol_vec = mol_vec.sum(dim=0) / self.aggregation_norm
+                elif self.aggregation == 'max':
+                    mol_vec = mol_vec.max(dim=0)[0]
+                elif self.aggregation == 'softmax':
+                    exp = mol_vec.exp()
+                    exp_sum = exp.sum(dim=0, keepdim=True)
+                    mol_vec = torch.sum(mol_vec * exp / exp_sum, dim=0)
                 mol_vecs.append(mol_vec)
 
         mol_vecs = torch.stack(mol_vecs, dim=0)  # (num_molecules, hidden_size)

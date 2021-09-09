@@ -211,7 +211,7 @@ Note that the hyperparameter optimization script sees all the data given to it. 
 
 ### Aggregation
 
-By default, the atom-level representations from the message passing network are averaged over all atoms of a molecule to yield a molecule-level representation. Alternatively, the atomic vectors can be summed up (by specifying `--aggregation sum`) or summed up and divided by a constant number N (by specifying `--aggregation norm --aggregation_norm <N>`). A reasonable value for N is usually the average number of atoms per molecule in the dataset of interest. The default is `--aggregation_norm 100`.
+By default, the atom-level representations from the message passing network are averaged over all atoms of a molecule to yield a molecule-level representation. Alternatively, the atomic vectors can be summed up (by specifying `--aggregation sum`) or summed up and divided by a constant number N (by specifying `--aggregation norm --aggregation_norm <N>`). A reasonable value for N is usually the average number of atoms per molecule in the dataset of interest. The default is `--aggregation_norm 100`. In general, `norm` is a scaled `sum`, and is more stable. If a target value depends on the number of atoms in a molecule, always use `norm` (or `sum`). Further options include `max`, which takes the maximum feature value of all atoms in a molecule, as well as `softmax`, which weights the overall value toward the maximum of the atoms in a molecule. `max` and `softmax` are useful if only parts of the molecule influence a target property.
 
 ### Additional Features
 
