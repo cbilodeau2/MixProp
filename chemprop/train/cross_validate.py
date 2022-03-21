@@ -5,7 +5,7 @@ from logging import Logger
 import os
 import sys
 from typing import Callable, Dict, List, Tuple
-
+import subprocess
 import numpy as np
 import pandas as pd
 
@@ -14,7 +14,7 @@ from chemprop.args import TrainArgs
 from chemprop.constants import TEST_SCORES_FILE_NAME, TRAIN_LOGGER_NAME
 from chemprop.data import get_data, get_task_names, MoleculeDataset, validate_dataset_type
 from chemprop.utils import create_logger, makedirs, timeit
-from chemprop.features import set_extra_atom_fdim, set_extra_bond_fdim, set_explicit_h, set_reaction
+from chemprop.features import set_extra_atom_fdim, set_extra_bond_fdim, set_explicit_h, set_adding_hs, set_reaction, reset_featurization_parameters
 
 
 @timeit(logger_name=TRAIN_LOGGER_NAME)
@@ -54,20 +54,29 @@ def cross_validate(args: TrainArgs,
 
     # Save args
     makedirs(args.save_dir)
-    args.save(os.path.join(args.save_dir, 'args.json'))
+    try:
+        args.save(os.path.join(args.save_dir, 'args.json'))
+    except subprocess.CalledProcessError:
+        debug('Could not write the reproducibility section of the arguments to file, thus omitting this section.')
+        args.save(os.path.join(args.save_dir, 'args.json'), with_reproducibility=False)
 
     #set explicit H option and reaction option
+    reset_featurization_parameters(logger=logger)
     set_explicit_h(args.explicit_h)
-    set_reaction(args.reaction, args.reaction_mode)
+    set_adding_hs(args.adding_h)
+    if args.reaction:
+        set_reaction(args.reaction, args.reaction_mode)
+    elif args.reaction_solvent:
+        set_reaction(True, args.reaction_mode)
         
     # Get data
     debug('Loading data')
     data = get_data(
         path=args.data_path,
         args=args,
-        smiles_columns=args.smiles_columns,
         logger=logger,
-        skip_none_targets=True
+        skip_none_targets=True,
+        data_weights_path=args.data_weights_path
     )
     validate_dataset_type(data, dataset_type=args.dataset_type)
     args.features_size = data.features_size()
@@ -147,13 +156,21 @@ def cross_validate(args: TrainArgs,
                       [f'Fold {i} {metric}' for i in range(args.num_folds)]
         writer.writerow(header)
 
-        for task_num, task_name in enumerate(args.task_names):
-            row = [task_name]
+        if args.dataset_type == 'spectra': # spectra data type has only one score to report
+            row = ['spectra']
             for metric, scores in all_scores.items():
-                task_scores = scores[:, task_num]
+                task_scores = scores[:,0]
                 mean, std = np.nanmean(task_scores), np.nanstd(task_scores)
                 row += [mean, std] + task_scores.tolist()
             writer.writerow(row)
+        else: # all other data types, separate scores by task
+            for task_num, task_name in enumerate(args.task_names):
+                row = [task_name]
+                for metric, scores in all_scores.items():
+                    task_scores = scores[:, task_num]
+                    mean, std = np.nanmean(task_scores), np.nanstd(task_scores)
+                    row += [mean, std] + task_scores.tolist()
+                writer.writerow(row)
 
     # Determine mean and std score of main metric
     avg_scores = np.nanmean(all_scores[args.metric], axis=1)

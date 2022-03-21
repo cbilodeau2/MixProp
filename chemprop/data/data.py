@@ -10,7 +10,7 @@ from rdkit import Chem
 from .scaler import StandardScaler
 from chemprop.features import get_features_generator
 from chemprop.features import BatchMolGraph, MolGraph
-from chemprop.features import is_explicit_h, is_reaction
+from chemprop.features import is_explicit_h, is_reaction, is_adding_hs, is_mol
 from chemprop.rdkit import make_mol
 
 # Cache of graph featurizations
@@ -58,9 +58,12 @@ class MoleculeDatapoint:
                  smiles: List[str],
                  targets: List[Optional[float]] = None,
                  row: OrderedDict = None,
-                 data_weight: float = 1,
+                 data_weight: float = None,
+                 gt_targets: List[bool] = None,
+                 lt_targets: List[bool] = None,
                  features: np.ndarray = None,
                  features_generator: List[str] = None,
+                 phase_features: List[float] = None,
                  atom_features: np.ndarray = None,
                  atom_descriptors: np.ndarray = None,
                  bond_features: np.ndarray = None,
@@ -71,8 +74,11 @@ class MoleculeDatapoint:
         :param targets: A list of targets for the molecule (contains None for unknown target values).
         :param row: The raw CSV row containing the information for this molecule.
         :param data_weight: Weighting of the datapoint for the loss function.
+        :param gt_targets: Indicates whether the targets are an inequality regression target of the form ">x".
+        :param lt_targets: Indicates whether the targets are an inequality regression target of the form "<x".
         :param features: A numpy array containing additional features (e.g., Morgan fingerprint).
         :param features_generator: A list of features generators to use.
+        :param phase_features: A one-hot vector indicating the phase of the data, as used in spectra data.
         :param atom_descriptors: A numpy array containing additional atom descriptors to featurize the molecule
         :param bond_features: A numpy array containing additional bond features to featurize the molecule
         :param overwrite_default_atom_features: Boolean to overwrite default atom features by atom_features
@@ -85,17 +91,25 @@ class MoleculeDatapoint:
         self.smiles = smiles
         self.targets = targets
         self.row = row
-        self.data_weight = data_weight
         self.features = features
         self.features_generator = features_generator
+        self.phase_features = phase_features
         self.atom_descriptors = atom_descriptors
         self.atom_features = atom_features
         self.bond_features = bond_features
         self.overwrite_default_atom_features = overwrite_default_atom_features
         self.overwrite_default_bond_features = overwrite_default_bond_features
-        self.is_reaction = is_reaction()
-        self.is_explicit_h = is_explicit_h()
-        
+        self.is_mol_list = [is_mol(s) for s in smiles]
+        self.is_reaction_list = [is_reaction(x) for x in self.is_mol_list]
+        self.is_explicit_h_list = [is_explicit_h(x) for x in self.is_mol_list]
+        self.is_adding_hs_list = [is_adding_hs(x) for x in self.is_mol_list]
+
+        if data_weight is not None:
+            self.data_weight = data_weight
+        if gt_targets is not None:
+            self.gt_targets = gt_targets
+        if lt_targets is not None:
+            self.lt_targets = lt_targets
 
         # Generate additional features if given a generator
         if self.features_generator is not None:
@@ -103,8 +117,8 @@ class MoleculeDatapoint:
 
             for fg in self.features_generator:
                 features_generator = get_features_generator(fg)
-                for m in self.mol:
-                    if not self.is_reaction:
+                for m, reaction in zip(self.mol, self.is_reaction_list):
+                    if not reaction:
                         if m is not None and m.GetNumHeavyAtoms() > 0:
                             self.features.extend(features_generator(m))
                         # for H2
@@ -143,10 +157,9 @@ class MoleculeDatapoint:
             self.atom_descriptors, self.atom_features, self.bond_features
 
     @property
-    def mol(self) -> Union[List[Chem.Mol], List[Tuple[Chem.Mol, Chem.Mol]]]:
+    def mol(self) -> List[Union[Chem.Mol, Tuple[Chem.Mol, Chem.Mol]]]:
         """Gets the corresponding list of RDKit molecules for the corresponding SMILES list."""
-        mol = make_mols(self.smiles, self.is_reaction, self.is_explicit_h)
-
+        mol = make_mols(self.smiles, self.is_reaction_list, self.is_explicit_h_list, self.is_adding_hs_list)
         if cache_mol():
             for s, m in zip(self.smiles, mol):
                 SMILES_TO_MOL[s] = m
@@ -233,7 +246,6 @@ class MoleculeDataset(Dataset):
         :param data: A list of :class:`MoleculeDatapoint`\ s.
         """
         self._data = data
-        self._scaler = None
         self._batch_graph = None
         self._random = Random()
 
@@ -320,6 +332,17 @@ class MoleculeDataset(Dataset):
 
         return [d.features for d in self._data]
 
+    def phase_features(self) -> List[np.ndarray]:
+        """
+        Returns the phase features associated with each molecule (if they exist).
+
+        :return: A list of 1D numpy arrays containing the phase features for each molecule or None if there are no features.
+        """
+        if len(self._data) == 0 or self._data[0].phase_features is None:
+            return None
+
+        return [d.phase_features for d in self._data]
+
     def atom_features(self) -> List[np.ndarray]:
         """
         Returns the atom descriptors associated with each molecule (if they exit).
@@ -358,8 +381,11 @@ class MoleculeDataset(Dataset):
 
     def data_weights(self) -> List[float]:
         """
-        Returns the loss weighting associated with each molecule
+        Returns the loss weighting associated with each datapoint.
         """
+        if not hasattr(self._data[0], 'data_weight'):
+            return [1. for d in self._data]
+
         return [d.data_weight for d in self._data]
 
     def targets(self) -> List[List[Optional[float]]]:
@@ -369,6 +395,24 @@ class MoleculeDataset(Dataset):
         :return: A list of lists of floats (or None) containing the targets.
         """
         return [d.targets for d in self._data]
+
+    def gt_targets(self) -> List[np.ndarray]:
+        """
+
+        """
+        if not hasattr(self._data[0], 'gt_targets'):
+            return None
+
+        return [d.gt_targets for d in self._data]
+
+    def lt_targets(self) -> List[np.ndarray]:
+        """
+
+        """
+        if not hasattr(self._data[0], 'lt_targets'):
+            return None
+
+        return [d.lt_targets for d in self._data]
 
     def num_tasks(self) -> int:
         """
@@ -439,10 +483,7 @@ class MoleculeDataset(Dataset):
                 (self._data[0].features is None and not scale_bond_features and not scale_atom_descriptors):
             return None
 
-        if scaler is not None:
-            self._scaler = scaler
-
-        elif self._scaler is None:
+        if scaler is None:
             if scale_atom_descriptors and not self._data[0].atom_descriptors is None:
                 features = np.vstack([d.raw_atom_descriptors for d in self._data])
             elif scale_atom_descriptors and not self._data[0].atom_features is None:
@@ -451,23 +492,23 @@ class MoleculeDataset(Dataset):
                 features = np.vstack([d.raw_bond_features for d in self._data])
             else:
                 features = np.vstack([d.raw_features for d in self._data])
-            self._scaler = StandardScaler(replace_nan_token=replace_nan_token)
-            self._scaler.fit(features)
+            scaler = StandardScaler(replace_nan_token=replace_nan_token)
+            scaler.fit(features)
 
         if scale_atom_descriptors and not self._data[0].atom_descriptors is None:
             for d in self._data:
-                d.set_atom_descriptors(self._scaler.transform(d.raw_atom_descriptors))
+                d.set_atom_descriptors(scaler.transform(d.raw_atom_descriptors))
         elif scale_atom_descriptors and not self._data[0].atom_features is None:
             for d in self._data:
-                d.set_atom_features(self._scaler.transform(d.raw_atom_features))
+                d.set_atom_features(scaler.transform(d.raw_atom_features))
         elif scale_bond_features:
             for d in self._data:
-                d.set_bond_features(self._scaler.transform(d.raw_bond_features))
+                d.set_bond_features(scaler.transform(d.raw_bond_features))
         else:
             for d in self._data:
-                d.set_features(self._scaler.transform(d.raw_features.reshape(1, -1))[0])
+                d.set_features(scaler.transform(d.raw_features.reshape(1, -1))[0])
 
-        return self._scaler
+        return scaler
 
     def normalize_targets(self) -> StandardScaler:
         """
@@ -494,7 +535,11 @@ class MoleculeDataset(Dataset):
         :param targets: A list of lists of floats (or None) containing targets for each molecule. This must be the
                         same length as the underlying dataset.
         """
-        assert len(self._data) == len(targets)
+        if not len(self._data) == len(targets):
+            raise ValueError(
+                "number of molecules and targets must be of same length! "
+                f"num molecules: {len(self._data)}, num targets: {len(targets)}"
+            )
         for i in range(len(self._data)):
             self._data[i].set_targets(targets[i])
 
@@ -659,6 +704,37 @@ class MoleculeDataLoader(DataLoader):
         return [self._dataset[index].targets for index in self._sampler]
 
     @property
+    def gt_targets(self) -> List[List[Optional[bool]]]:
+        """
+        Returns booleans for whether each target is an inequality rather than a value target, associated with each molecule.
+
+        :return: A list of lists of booleans (or None) containing the targets.
+        """
+        if self._class_balance or self._shuffle:
+            raise ValueError('Cannot safely extract targets when class balance or shuffle are enabled.')
+        
+        if not hasattr(self._dataset[0],'gt_targets'):
+            return None
+
+        return [self._dataset[index].gt_targets for index in self._sampler]
+
+    @property
+    def lt_targets(self) -> List[List[Optional[bool]]]:
+        """
+        Returns booleans for whether each target is an inequality rather than a value target, associated with each molecule.
+
+        :return: A list of lists of booleans (or None) containing the targets.
+        """
+        if self._class_balance or self._shuffle:
+            raise ValueError('Cannot safely extract targets when class balance or shuffle are enabled.')
+
+        if not hasattr(self._dataset[0],'lt_targets'):
+            return None
+
+        return [self._dataset[index].lt_targets for index in self._sampler]
+
+
+    @property
     def iter_size(self) -> int:
         """Returns the number of data points included in each full iteration through the :class:`MoleculeDataLoader`."""
         return len(self._sampler)
@@ -668,17 +744,21 @@ class MoleculeDataLoader(DataLoader):
         return super(MoleculeDataLoader, self).__iter__()
 
     
-def make_mols(smiles: List[str], reaction: bool, keep_h: bool):
+def make_mols(smiles: List[str], reaction_list: List[bool], keep_h_list: List[bool], add_h_list: List[bool]):
     """
     Builds a list of RDKit molecules (or a list of tuples of molecules if reaction is True) for a list of smiles.
 
     :param smiles: List of SMILES strings.
-    :param reaction: Boolean whether the SMILES strings are to be treated as a reaction.
-    :param keep_h: Boolean whether to keep hydrogens in the input smiles. This does not add hydrogens, it only keeps them if they are specified.
+    :param reaction_list: List of booleans whether the SMILES strings are to be treated as a reaction.
+    :param keep_h_list: List of booleans whether to keep hydrogens in the input smiles. This does not add hydrogens, it only keeps them if they are specified.
+    :param add_h_list: List of booleasn whether to add hydrogens to the input smiles.
     :return: List of RDKit molecules or list of tuple of molecules.
     """
-    if reaction:
-        mol = [SMILES_TO_MOL[s] if s in SMILES_TO_MOL else (make_mol(s.split(">")[0], keep_h), make_mol(s.split(">")[-1], keep_h)) for s in smiles]
-    else:
-        mol = [SMILES_TO_MOL[s] if s in SMILES_TO_MOL else make_mol(s, keep_h) for s in smiles]
+    mol = []
+    for s, reaction, keep_h, add_h in zip(smiles, reaction_list, keep_h_list, add_h_list):
+        if reaction:
+            mol.append(SMILES_TO_MOL[s] if s in SMILES_TO_MOL else (make_mol(s.split(">")[0], keep_h, add_h), make_mol(s.split(">")[-1], keep_h, add_h)))
+        else:
+            mol.append(SMILES_TO_MOL[s] if s in SMILES_TO_MOL else make_mol(s, keep_h, add_h))
     return mol
+

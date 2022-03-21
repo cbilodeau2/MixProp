@@ -4,7 +4,7 @@
 [![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
 [![Build Status](https://github.com/chemprop/chemprop/workflows/tests/badge.svg)](https://github.com/chemprop/chemprop)
 
-This repository contains message passing neural networks for molecular property prediction as described in the paper [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237) and as used in the paper [A Deep Learning Approach to Antibiotic Discovery](https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1).
+This repository contains message passing neural networks for molecular property prediction as described in the paper [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237) and as used in the paper [A Deep Learning Approach to Antibiotic Discovery](https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1) for molecules and [Machine Learning of Reaction Properties via Learned Representations of the Condensed Graph of Reaction](https://doi.org/10.1021/acs.jcim.1c00975) for reactions.
 
 **Documentation:** Full documentation of Chemprop is available at https://chemprop.readthedocs.io/en/latest/.
 
@@ -24,23 +24,28 @@ Please see [aicures.mit.edu](https://aicures.mit.edu) and the associated [data G
   * [Option 2: Installing from source](#option-2-installing-from-source)
   * [Docker](#docker)
 - [Web Interface](#web-interface)
+- [Within Python](#within-python)
 - [Data](#data)
 - [Training](#training)
   * [Train/Validation/Test Splits](#trainvalidationtest-splits)
-  * [Cross validation](#cross-validation)
-  * [Ensembling](#ensembling)
-  * [Hyperparameter Optimization](#hyperparameter-optimization)
+  * [Loss functions](#loss-functions)
+  * [Metrics](#metrics)
+  * [Cross validation and ensembling](#cross-validation-and-ensembling)
   * [Aggregation](#aggregation)
   * [Additional Features](#additional-features)
-    * [RDKit 2D Features](#rdkit-2d-features)
-    * [Custom Features](#custom-features)
-    * [Atomic Features](#atomic-features)
+    * [Custom Features](#molecule-level-custom-features)
+    * [RDKit 2D Features](#molecule-level-rdkit-2d-features)
+    * [Atomic Features](#atom-level-features)
+  * [Spectra](#spectra)
   * [Reaction](#reaction)
+  * [Reaction in a solvent / Reaction and a molecule](#reaction-in-a-solvent--reaction-and-a-molecule)
   * [Pretraining](#pretraining)
   * [Missing target values](#missing-target-values)
+  * [Weighted training by target and data](#weighted-training-by-target-and-data)
   * [Caching](#caching)
 - [Predicting](#predicting)
   * [Epistemic Uncertainty](#epistemic-uncertainty)
+- [Hyperparameter Optimization](#hyperparameter-optimization)
 - [Encode Fingerprint Latent Representation](#encode-fingerprint-latent-representation)
 - [Interpreting Model Prediction](#interpreting)
 - [TensorBoard](#tensorboard)
@@ -99,10 +104,6 @@ To set a specific CUDA toolkit version, add `cudatoolkit=X.Y` to `environment.ym
 
 For those less familiar with the command line, Chemprop also includes a web interface which allows for basic training and predicting. An example of the website (in demo mode with training disabled) is available here: [chemprop.csail.mit.edu](http://chemprop.csail.mit.edu/).
 
-![Training with our web interface](https://github.com/chemprop/chemprop/raw/master/chemprop/web/app/static/images/web_train.png "Training with our web interface")
-
-![Predicting with our web interface](https://github.com/chemprop/chemprop/raw/master/chemprop/web/app/static/images/web_predict.png "Predicting with our web interface")
-
 You can start the web interface on your local machine in two ways. Flask is used for development mode while gunicorn is used for production mode.
 
 ### Flask
@@ -122,17 +123,29 @@ Next, navigate to `chemprop/web` and run `gunicorn --bind {host}:{port} 'wsgi:bu
    * Arguments including `init_db` and `demo` can be passed with this pattern: `'wsgi:build_app(init_db=True, demo=True)'` 
    * Gunicorn documentation can be found [here](http://docs.gunicorn.org/en/stable/index.html).
 
+## Within Python
+
+For information on the use of Chemprop within a python script, refer to the [Within a python script](https://chemprop.readthedocs.io/en/latest/tutorial.html#within-a-python-script)
+section of the documentation. A [Google Colab notebook](https://colab.research.google.com/github/chemprop/chemprop/blob/master/colab_demo.ipynb) is also available with several examples. Note that this notebook is intended to be run in Google Colab rather than as a Jupypter notebook on your local machine.
+
+
 ## Data
 
-In order to train a model, you must provide training data containing molecules (as SMILES strings) and known target values. Targets can either be real numbers, if performing regression, or binary (i.e. 0s and 1s), if performing classification. Target values which are unknown can be left as blanks.
+In order to train a model, you must provide training data containing molecules (as SMILES strings) and known target values.
 
-Our model can either train on a single target ("single tasking") or on multiple targets simultaneously ("multi-tasking").
+Chemprop can either train on a single target ("single tasking") or on multiple targets simultaneously ("multi-tasking").
+
+There are four current supported dataset types. Targets with unknown values can be left as blanks.
+* **Regression.** Targets are float values. With bounded loss functions or metrics, the values may also be simple inequalities (e.g., >7.5 or <5.0).
+* **Classification.** Targets are binary (i.e. 0s and 1s) indicators of the classification.
+* **Multiclass.** Targets are integers (starting with zero) indicating which class the datapoint belongs to, out of a total number of exclusive classes indicated with `--number_of_classes <int>`.
+* **Spectra.** Targets are positive float values with each target representing the signal at a specific spectrum position.
 
 The data file must be be a **CSV file with a header row**. For example:
 ```
-smiles,NR-AR,NR-AR-LBD,NR-AhR,NR-Aromatase,NR-ER,NR-ER-LBD,NR-PPAR-gamma,SR-ARE,SR-ATAD5,SR-HSE,SR-MMP,SR-p53
-CCOc1ccc2nc(S(N)(=O)=O)sc2c1,0,0,1,,,0,0,1,0,0,0,0
-CCN1C(=O)NC(c2ccccc2)C1=O,0,0,0,0,0,0,0,,0,,0,0
+smiles,NR-AR,NR-AR-LBD,NR-AhR
+CCOc1ccc2nc(S(N)(=O)=O)sc2c1,0,0,1
+CCN1C(=O)NC(c2ccccc2)C1=O,0,,0
 ...
 ```
 
@@ -146,7 +159,7 @@ To train a model, run:
 ```
 chemprop_train --data_path <path> --dataset_type <type> --save_dir <dir>
 ```
-where `<path>` is the path to a CSV file containing a dataset, `<type>` is either "classification" or "regression" depending on the type of the dataset, and `<dir>` is the directory where model checkpoints will be saved.
+where `<path>` is the path to a CSV file containing a dataset, `<type>` is one of [classification, regression, multiclass, spectra] depending on the type of the dataset, and `<dir>` is the directory where model checkpoints will be saved.
 
 For example:
 ```
@@ -166,38 +179,36 @@ Notes:
 
 Our code supports several methods of splitting data into train, validation, and test sets.
 
-**Random:** By default, the data will be split randomly into train, validation, and test sets.
+* **Random.** By default, the data will be split randomly into train, validation, and test sets.
+* **Scaffold.** Alternatively, the data can be split by molecular scaffold so that the same scaffold never appears in more than one split. This can be specified by adding `--split_type scaffold_balanced`.
+* **Random With Repeated SMILES.** Some datasets have multiple entries with the same SMILES. To constrain splitting so the repeated SMILES are in the same split, use the argument `--split_type random_with_repeated_smiles`.
+* **Separate val/test.** If you have separate data files you would like to use as the validation or test set, you can specify them with `--separate_val_path <val_path>` and/or `--separate_test_path <test_path>`. If both are provided, then the data specified by `--data_path` is used entirely as the training data. If only one separate path is provided, the `--data_path` data is split between train data and either val or test data, whichever is not provided separately.
 
-**Scaffold:** Alternatively, the data can be split by molecular scaffold so that the same scaffold never appears in more than one split. This can be specified by adding `--split_type scaffold_balanced`.
+When data contains multiple molecules per datapoint, scaffold and repeated SMILES splitting will only constrain splitting based on one of the molecules. The key molecule can be chosen with the argument `--split_key_molecule <int>`, with the default setting using an index of 0 indicating the first molecule.
 
-**Separate val/test:** If you have separate data files you would like to use as the validation or test set, you can specify them with `--separate_val_path <val_path>` and/or `--separate_test_path <test_path>`. If both are provided, then the data specified by `--data_path` is used entirely as the training data. If only one separate path is provided, the `--data_path` data is split between train data and either val or test data, whichever is not provided separately.
+By default, both random and scaffold split the data into 80% train, 10% validation, and 10% test. This can be changed with `--split_sizes <train_frac> <val_frac> <test_frac>`. The default setting is `--split_sizes 0.8 0.1 0.1`. If a separate validation set or test set is provided, the split defaults to 80%-20%. Splitting involves a random component and can be seeded with `--seed <seed>`. The default setting is `--seed 0`.
 
-Note: By default, both random and scaffold split the data into 80% train, 10% validation, and 10% test. This can be changed with `--split_sizes <train_frac> <val_frac> <test_frac>`. For example, the default setting is `--split_sizes 0.8 0.1 0.1`. Both also involve a random component and can be seeded with `--seed <seed>`. The default setting is `--seed 0`.
+### Loss functions
 
-### Cross validation
+The loss functions available for training are dependent on the selected dataset type. Loss functions other than the defaults can be selected from the supported options with the argument `--loss_function <function>`.
+* **Regression.** mse (default), bounded_mse.
+* **Classification.** binary_cross_entropy (default), mcc (a soft version of Matthews Correlation Coefficient)
+* **Multiclass.** cross_entropy (default), mcc (a soft version of Matthews Correlation Coefficient)
+* **Spectra.** sid (default, spectral information divergence), wasserstein (First-order Wasserstein distance a.k.a. earthmover's distance.)
 
-k-fold cross-validation can be run by specifying `--num_folds <k>`. The default is `--num_folds 1`.
+### Metrics
 
-### Ensembling
+Metrics are used to evaluate the success of the model against the test set as the final model score and to determine the optimal epoch to save the model at based on the validation set. The primary metric used for both purposes is selected with the argument `--metric <metric>` and additional metrics for test set score only can be added with `--extra_metrics <metric1> <metric2> ...`. Supported metrics are dependent on the dataset type. Unlike loss functions, metrics do not have to be differentiable.
+* **Regression.** rmse (default), mae, mse, r2, bounded_rmse, bounded_mae, bounded_mse (default if bounded_mse is loss function).
+* **Classification.** auc (default), prc-auc, accuracy, binary_cross_entropy, f1, mcc.
+* **Multiclass.** cross_entropy (default), accuracy, f1, mcc.
+* **Spectra.** sid (default), wasserstein.
 
-To train an ensemble, specify the number of models in the ensemble with `--ensemble_size <n>`. The default is `--ensemble_size 1`.
+### Cross validation and ensembling
 
-### Hyperparameter Optimization
+k-fold cross-validation can be run by specifying `--num_folds <k>`. The default is `--num_folds 1`. Each trained model will have different data splits. The reported test score will be the average of the metrics from each fold.
 
-Although the default message passing architecture works quite well on a variety of datasets, optimizing the hyperparameters for a particular dataset often leads to marked improvement in predictive performance. We have automated hyperparameter optimization via Bayesian optimization (using the [hyperopt](https://github.com/hyperopt/hyperopt) package), which will find the optimal hidden size, depth, dropout, and number of feed-forward layers for our model. Optimization can be run as follows:
-```
-chemprop_hyperopt --data_path <data_path> --dataset_type <type> --num_iters <n> --config_save_path <config_path>
-```
-where `<n>` is the number of hyperparameter settings to try and `<config_path>` is the path to a `.json` file where the optimal hyperparameters will be saved.
-
-If installed from source, `chemprop_hyperopt` can be replaced with `python hyperparameter_optimization.py`.
-
-Once hyperparameter optimization is complete, the optimal hyperparameters can be applied during training by specifying the config path as follows:
-```
-chemprop_train --data_path <data_path> --dataset_type <type> --config_path <config_path>
-```
-
-Note that the hyperparameter optimization script sees all the data given to it. The intended use is to run the hyperparameter optimization script on a dataset with the eventual test set held out. If you need to optimize hyperparameters separately for several different cross validation splits, you should e.g. set up a bash script to run hyperparameter_optimization.py separately on each split's training and validation data with test held out.
+To train an ensemble, specify the number of models in the ensemble with `--ensemble_size <n>`. The default is `--ensemble_size 1`. Each trained model within the ensemble will share data splits. The reported test score for one ensemble is the metric applied to the averaged prediction across the models. Ensembling and cros-validation can be used at the same time.
 
 ### Aggregation
 
@@ -206,6 +217,13 @@ By default, the atom-level representations from the message passing network are 
 ### Additional Features
 
 While the model works very well on its own, especially after hyperparameter optimization, we have seen that additional features can further improve performance on certain datasets. The additional features can be added at the atom-, bond, or molecule-level. Molecule-level features can be either automatically generated by RDKit or custom features provided by the user.
+
+#### Molecule-Level Custom Features
+
+If you install from source, you can modify the code to load custom features as follows:
+
+1. **Generate features:** If you want to generate features in code, you can write a custom features generator function in `chemprop/features/features_generators.py`. Scroll down to the bottom of that file to see a features generator code template.
+2. **Load features:** If you have features saved as a numpy `.npy` file or as a `.csv` file, you can load the features by using `--features_path /path/to/features`. Note that the features must be in the same order as the SMILES strings in your data file. Also note that `.csv` files must have a header row and the features should be comma-separated with one line per molecule. By default, provided features will be normalized unless the flag `--no_features_scaling` is used.
 
 #### Molecule-Level RDKit 2D Features
 
@@ -217,13 +235,6 @@ The full list of available features for `--features_generator` is as follows.
 `morgan_count` is count-based Morgan, radius 2 and 2048 bits.
 `rdkit_2d` is an unnormalized version of 200 assorted rdkit descriptors. Full list can be found at the bottom of our paper: https://arxiv.org/pdf/1904.01561.pdf
 `rdkit_2d_normalized` is the CDF-normalized version of the 200 rdkit descriptors.
-
-#### Molecule-Level Custom Features
-
-If you install from source, you can modify the code to load custom features as follows:
-
-1. **Generate features:** If you want to generate features in code, you can write a custom features generator function in `chemprop/features/features_generators.py`. Scroll down to the bottom of that file to see a features generator code template.
-2. **Load features:** If you have features saved as a numpy `.npy` file or as a `.csv` file, you can load the features by using `--features_path /path/to/features`. Note that the features must be in the same order as the SMILES strings in your data file. Also note that `.csv` files must have a header row and the features should be comma-separated with one line per molecule. By default, provided features will be normalized unless the flag `--no_features_scaling` is used.
 
 #### Atom-Level Features
 
@@ -246,11 +257,49 @@ The bond-level features are concatenated with the bond feature vectors before th
 
 Similar to molecule-, and atom-level features, the bond-level features are scaled by default. This can be disabled with the option `--no_bond_features_scaling`.
 
+### Spectra
+
+One of the data types that can be trained with Chemprop is "spectra". Spectra training is different than other datatypes because it considers the predictions of all targets together. Targets for spectra should be provided as the values for the spectrum at a specific position in the spectrum. The loss function for spectra is SID, spectral information divergence. Alternatively, Wasserstein distance (earthmover's distance) can be used for both loss function and metric with input arguments `--metric wasserstein --loss_function wasserstein`.
+
+Spectra predictions are configured to return only positive values and normalize them to sum each spectrum to 1. Activation to enforce positivity is an exponential function by default but can also be set as a Softplus function, according to the argument `--spectra_activation <exp or softplus>`. Value positivity is enforced on input targets as well using a floor value that replaces negative or smaller target values with the floor value (default 1e-8), customizable with the argument `--spectra_target_floor <float>`.
+
+In absorption spectra, sometimes the phase of collection will create regions in the spectrum where data collection or prediction would be unreliable. To exclude these regions, include paths to phase features for your data (`--phase_features_path <path>`) and a mask indicating the spectrum regions that are supported (`--spectra_phase_mask_path <path>`). The format for the mask file is a `.csv` file with columns for the spectrum positions and rows for the phases, with column and row labels in the same order as they appear in the targets and features files.
+
 ### Reaction
 
-As an alternative to molecule SMILES, Chemprop can also process atom-mapped reaction SMILES (see [Daylight manual](https://www.daylight.com/meetings/summerschool01/course/basics/smirks.html) for details on reaction SMILES), which consist of three parts denoting reactants, agents and products, separated by ">". Use the option `--reaction` to enable the input of reactions, which transforms the reactants and products of each reaction to the corresponding condensed graph of reaction and changes the initial atom and bond features to hold information from both the reactant and product (option `--reaction_mode reac_prod`), or from the reactant and the difference upon reaction (option `--reaction_mode reac_diff`, default) or from the product and the difference upon reaction (option `--reaction_mode prod_diff`). In reaction mode, Chemprop thus concatenates information to each atomic and bond feature vector, for example, with option `--reaction_mode reac_prod`, each atomic feature vector holds information on the state of the atom in the reactant (similar to default Chemprop), and concatenates information on the state of the atom in the product, so that the size of the D-MPNN increases slightly. Agents are discarded. Functions incompatible with a reaction as input (scaffold splitting and feature generation) are carried out on the reactants only. If the atom-mapped reaction SMILES contain mapped hydrogens, enable explicit hydrogens via `--explicit_h`. Example of an atom-mapped reaction SMILES denoting the reaction of methanol to formaldehyde without hydrogens: `[CH3:1][OH:2]>>[CH2:1]=[O:2]` and with hydrogens: `[C:1]([H:3])([H:4])([H:5])[O:2][H:6]>>[C:1]([H:3])([H:4])=[O:2].[H:5][H:6]`. The reactions do not need to be balanced and can thus contain unmapped parts, for example leaving groups, if necessary.
+As an alternative to molecule SMILES, Chemprop can also process atom-mapped reaction SMILES (see [Daylight manual](https://www.daylight.com/meetings/summerschool01/course/basics/smirks.html) for details on reaction SMILES), which consist of three parts denoting reactants, agents and products, separated by ">". Use the option `--reaction` to enable the input of reactions, which transforms the reactants and products of each reaction to the corresponding condensed graph of reaction and changes the initial atom and bond features to hold information from both the reactant and product (option `--reaction_mode reac_prod`), or from the reactant and the difference upon reaction (option `--reaction_mode reac_diff`, default) or from the product and the difference upon reaction (option `--reaction_mode prod_diff`). In reaction mode, Chemprop thus concatenates information to each atomic and bond feature vector, for example, with option `--reaction_mode reac_prod`, each atomic feature vector holds information on the state of the atom in the reactant (similar to default Chemprop), and concatenates information on the state of the atom in the product, so that the size of the D-MPNN increases slightly. Agents are discarded. Functions incompatible with a reaction as input (scaffold splitting and feature generation) are carried out on the reactants only. If the atom-mapped reaction SMILES contain mapped hydrogens, enable explicit hydrogens via `--explicit_h`. Example of an atom-mapped reaction SMILES denoting the reaction of methanol to formaldehyde without hydrogens: `[CH3:1][OH:2]>>[CH2:1]=[O:2]` and with hydrogens: `[C:1]([H:3])([H:4])([H:5])[O:2][H:6]>>[C:1]([H:3])([H:4])=[O:2].[H:5][H:6]`. The reactions do not need to be balanced and can thus contain unmapped parts, for example leaving groups, if necessary. With reaction modes `reac_prod`, `reac_diff` and `prod_diff`, the atom and bond features of unbalanced aroma are set to zero on the side of the reaction they are not specified. Alternatively, features can be set to the same values on the reactant and product side via the modes `reac_prod_balance`, `reac_diff_balance` and `prod_diff_balance`, which corresponds to a rough balancing of the reaction.
+For further details and benchmarking, as well as a citable reference, please refer to the [article](https://doi.org/10.1021/acs.jcim.1c00975).
 
-### Pretraining, With and Without Frozen Parameters
+### Reaction in a solvent / Reaction and a molecule]
+
+Chemprop can process a reaction in a solvent or a reaction and a molecule with the `--reaction_solvent` option. While this
+option is originally built to model a reaction in a solvent, this option works for any reaction and a molecule where 
+the molecule can represent anything, i.e. a solvent, a reagent, etc.
+This requires the input csv file to have two separate columns of SMILES: one column for atom-mapped reaction SMILES 
+and the other column for solvent/molecule SMILES. The reaction and solvent/molecule SMILES columns can be ordered in 
+any way (i.e. the first column can be either reaction SMILES or solvent SMILES and the second column can then be 
+solvent SMILES or reaction SMILES). However, the same column ordering as used in the training must be used for the prediction
+(i.e. if the input csv file used for model training had reaction SMILES as the first column and solvent SMILES as the 
+second columns, the csv file used for prediction should also have the first column as reaction SMILES and second column 
+as the solvent SMILES). For the information on atom-mapped reaction SMILES, please refer to [Reaction](#reaction).
+
+When using the `--reaction_solvent` option, `--number_of_molecules` must be set to 2. All options listed in the [Reaction](#reaction) 
+section such as different `--reaction_mode` and `--explicit_h` can be used for `--reaction_solvent`. Note that 
+`--explicit_h` option is only applicable to reaction SMILES. The `--adding_h` option can be used instead for 
+solvent/molecule if one wishes to add hydrogens to solvent/molecule SMILES. Chemprop allows differently sized MPNNs to be used for each 
+reaction and solvent/molecule encoding. Below are the input arguments for specifying the size and option of the two MPNNs:
+* Reaction:
+  * `--bias` Whether to add bias to linear layers.
+  * `--hidden_size` Dimensionality of hidden layers.
+  * `--depth` Number of message passing steps.
+  * `--explicit_h` Whether H are explicitly specified in input and should be kept this way. Only applicable to reaction SMILES.
+* Solvent / Molecule:
+  * `--bias_solvent` Whether to add bias to linear layers for solvent/molecule MPN.
+  * `--hidden_size_solvent` Dimensionality of hidden layers in solvent/molecule MPN.
+  * `--depth_solvent` Number of message passing steps for solvent/molecule.
+  * `--adding_h` Whether RDKit molecules will be constructed with adding the Hs to them. Applicable to any SMILES that is not reaction.
+
+### Pretraining
 
 Pretraining can be carried out using previously trained checkpoint files to set some or all of the initial values of a model for training. Additionally, some model parameters from the previous model can be frozen in place, so that they will not be updated during training.
 
@@ -266,9 +315,9 @@ Certain portions of the model can be loaded from a previous model and frozen so 
 
 When training multitask models (models which predict more than one target simultaneously), sometimes not all target values are known for all molecules in the dataset. Chemprop automatically handles missing entries in the dataset by masking out the respective values in the loss function, so that partial data can be utilized, too. The loss function is rescaled according to all non-missing values, and missing values furthermore do not contribute to validation or test errors. Training on partial data is therefore possible and encouraged (versus taking out datapoints with missing target entries). No keyword is needed for this behavior, it is the default.
 
-In contrast, when using `sklearn_train.py` (a utility script provided within Chemprop that trains standard models such as random forests on Morgan fingerprints via the python package scikit-learn), multi-task models cannot be trained on datasets with partially missing targets. However, one can instead train individual models for each task (via the argument `--single_task`), where missing values are automatically removed from the dataset. Thus, the training still makes use of all non-missing values, but by training individual models for each task, instead of one model with multiple output values. This restriction only applies to sklearn models (via  :code:`sklearn_train` or :code:`python sklearn_train.py`), but NOT to default Chemprop models via `chemprop_train` or `python train.py`.
+In contrast, when using `sklearn_train.py` (a utility script provided within Chemprop that trains standard models such as random forests on Morgan fingerprints via the python package scikit-learn), multi-task models cannot be trained on datasets with partially missing targets. However, one can instead train individual models for each task (via the argument `--single_task`), where missing values are automatically removed from the dataset. Thus, the training still makes use of all non-missing values, but by training individual models for each task, instead of one model with multiple output values. This restriction only applies to sklearn models (via  :code:`sklearn_train` or :code:`python sklearn_train.py`), but NOT to default Chemprop models via `chemprop_train` or `python train.py`. Alternatively, missing target values can be imputed by specifying `--impute_mode <single_task/linear/median/mean/frequent>`. The option `single_task` trains single task sklearn models on each task to predict missing values and is computationally expensive. The option `linear` trains a stochastic gradient linear model on each target to compute missing targets. Both `single_task` and `linear` are applicable to regression and classification task. For regression tasks, the options `median` and `mean` furthermore compute the median and mean of the training data. For classification tasks, `frequent` computes the most frequent value for each task. For all options, models are fitted to non-missing training targets and predict missing training targets. The test set is not affected by imputing.
 
-### Weighted Loss Functions in Training
+### Weighted Training by Target and Data
 
 By default, each task in multitask training and each provided datapoint are weighted equally for training. Weights can be specified in either case to allow some tasks in training or some specified data points to be weighted more heavily than others in the training of the model.
 
@@ -298,11 +347,41 @@ or
 chemprop_predict --test_path data/tox21.csv --checkpoint_path tox21_checkpoints/fold_0/model_0/model.pt --preds_path tox21_preds.csv
 ```
 
+Predictions made on an ensemble of models will return the average of the individual model predictions. To return the individual model predictions as well, include the `--individual_ensemble_predictions` argument.
+
 If installed from source, `chemprop_predict` can be replaced with `python predict.py`.
 
 ### Epistemic Uncertainty
 
-One method of obtaining the epistemic uncertainty of a prediction is to calculate the variance of an ensemble of models. To calculate these variances and write them as an additional column in the `--preds_path` file, use `--ensemble_variance`.
+One method of obtaining the epistemic uncertainty of a prediction is to calculate the variance of an ensemble of models. To calculate these variances and write them as an additional column in the `--preds_path` file, use `--ensemble_variance`. If this flag is used with a spectra prediction, it will instead return the average pairwise SID comparison of the different ensemble predictions.
+
+## Hyperparameter Optimization
+
+Although the default message passing architecture works quite well on a variety of datasets, optimizing the hyperparameters for a particular dataset often leads to marked improvement in predictive performance. We have automated hyperparameter optimization via Bayesian optimization (using the [hyperopt](https://github.com/hyperopt/hyperopt) package), which will find the optimal hidden size, depth, dropout, and number of feed-forward layers for our model. Optimization can be run as follows:
+```
+chemprop_hyperopt --data_path <data_path> --dataset_type <type> --num_iters <int> --config_save_path <config_path>
+```
+where `<int>` is the number of hyperparameter trial configurations to try and `<config_path>` is the path to a `.json` file where the optimal hyperparameters will be saved. If installed from source, `chemprop_hyperopt` can be replaced with `python hyperparameter_optimization.py`. Additional training arguments can also be supplied during submission, and they will be applied to all included training iterations (`--epochs`, `--aggregation`, `--num_folds`, `--gpu`, `--seed`, etc.). The argument `--log_dir <dir_path>` can optionally be provided to set a location for the hyperparameter optimization log.
+
+Results of completed trial configurations will be stored there and may serve as checkpoints for other instances of hyperparameter optimization if the directory for hyperopt checkpoint files has been specified, `--hyperopt_checkpoint_dir <path>`. If `--hyperopt_checkpoint_dir` is not specified, then checkpoints will default to being stored with the hyperparame. Interrupted hyperparameter optimizations can be restarted by specifying the same directory. Previously completed hyperparameter optimizations can be used as the starting point for new optimizations with a larger selected number of iterations. Note that the `--num_iters <int>` argument will count all previous checkpoints saved in the directory towards the total number of iterations, and if the existing number of checkpoints exceeds this argment then no new trials will be carried out.
+
+Manual training instances outside of hyperparameter optimization may also be considered in the history of attempted trials. The paths to the save_dirs for these training instances can be specified with `--manual_trial_dirs <list-of-directories>`. These directories must contain the files `test_scores.csv` and `args.json` as generated during training. To work appropriately, these training instances must be consistent with the parameter space being searched in hyperparameter optimization (including the hyperparameter optimization default of ffn_hidden_size being set equal to hidden_size). Manual trials considered with this argument are not added to the checkpoint directory.
+
+As part of the hyperopt search algorithm, the first trial configurations for the model will be randomly spread through the search space. The number of randomized trials can be altered with the argument `--startup_random_iters <int, default=10>`. After this number of trial iterations has been carried out, subsequent trials will use the directed search algorithm to select parameter configurations. This startup count considers the total number of trials in the checkpoint directory rather than the number that has been carried out by an individual instance of hyperparamter optimization.
+
+Parallel instances of hyperparameter optimization that share a checkpoint directory will have access to the shared results of hyperparameter optimization trials, allowing them to arrive at the desired total number of iterations collectively more quickly. In this way multiple GPUs or other computing resources can be applied to the search. Each instance of hyperparameter optimization is unaware of parallel trials that have not yet completed. This has several implications when running `n` parallel instances:
+* A parallel search will have different information and search different parameters than a single instance sequential search.
+* New trials will not consider the parameters in currently running trials, in rare cases leading to duplication.
+* Up to `n-1` extra random search iterations may occur above the number specified with `--startup_random_iters`.
+* Up to `n-1` extra total trials will be run above the chosen `num_iters`, though each instance will be exposed to at least that number of iterations.
+* The last parallel instance to complete is the only one that is aware of all the trials when reporting results.
+
+Once hyperparameter optimization is complete, the optimal hyperparameters can be applied during training by specifying the config path as follows:
+```
+chemprop_train --data_path <data_path> --dataset_type <type> --config_path <config_path>
+```
+
+Note that the hyperparameter optimization script sees all the data given to it. The intended use is to run the hyperparameter optimization script on a dataset with the eventual test set held out. If you need to optimize hyperparameters separately for several different cross validation splits, you should e.g. set up a bash script to run hyperparameter_optimization.py separately on each split's training and validation data with test held out.
 
 ## Encode Fingerprint Latent Representation
 
@@ -312,10 +391,11 @@ To load a trained model and encode the fingerprint latent representation of mole
   * `--checkpoint_dir <dir>` Directory where the model checkpoint is saved (i.e. `--save_dir` during training).
   * `--checkpoint_path <path>` Path to a model checkpoint file (`.pt` file).
 * `--preds_path` Path where a CSV file containing the encoded fingerprint vectors will be saved.
+* Any other arguments that you would supply for a prediction, such as atom or bond features.
 
-SMILES from the provided file are encoded using the MPNN weights loaded from a trained checkpoint file. Fingerprint encoding uses the same set of arguments as making predictions. Unlike making predictions, fingerprint encoding only supports a single saved checkpoint file.
+Latent representations of molecules are taken from intermediate stages of the prediction model. This latent representation can be taken at the output of the MPNN (default) or from the last input layer of the FFNN, specified using `--fingerprint_type <MPN or last_FFN>`. Fingerprint encoding uses the same set of arguments as making predictions. If multiple checkpoint files are supplied through `--checkpoint_dir`, then the fingerprint encodings for each of the models will be provided concatenated together as a longer vector.
 
-For example:
+Example input:
 ```
 chemprop_fingerprint --test_path data/tox21.csv --checkpoint_dir tox21_checkpoints --preds_path tox21_fingerprint.csv
 ```
