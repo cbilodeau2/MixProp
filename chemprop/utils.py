@@ -257,8 +257,8 @@ def load_frzn_model(model: torch.nn,
             for param_name in encoder_param_names + ffn_param_names:
                 model_state_dict = overwrite_state_dict(param_name,param_name,loaded_state_dict,model_state_dict)    
         
-        if current_args.frzn_ffn_layers >= current_args.ffn_num_layers:
-            raise Exception('Number of frozen FFN layers must be less than the number of FFN layers')
+#         if current_args.frzn_ffn_layers >= current_args.ffn_num_layers:
+#             raise Exception('Number of frozen FFN layers must be less than the number of FFN layers')
     
     # Load pretrained weights
     model.load_state_dict(model_state_dict)
@@ -715,6 +715,7 @@ def update_prediction_args(predict_args: PredictArgs,
                 setattr(predict_args,key,override_defaults.get(key,value))
     
     # Same number of molecules must be used in training as in making predictions
+    
     if train_args.number_of_molecules != predict_args.number_of_molecules:
         raise ValueError('A different number of molecules was used in training '
                         f'model than is specified for prediction, {train_args.number_of_molecules} '

@@ -109,7 +109,8 @@ class MoleculeModel(nn.Module):
         
         if args.checkpoint_frzn is not None:
             if args.frzn_ffn_layers >0:
-                for param in list(self.ffn.parameters())[0:2*args.frzn_ffn_layers]: # Freeze weights and bias for given number of layers
+                for param in list(self.ffn.parameters())[0:2*args.frzn_ffn_layers-2]: # Freeze weights and bias for given number of layers
+                    print('FREEZING PARAM:',param)
                     param.requires_grad=False
 
 
