@@ -92,7 +92,7 @@ class MoleculeModel(nn.Module):
         else:
             ffn = [
                 dropout,
-                nn.Linear(first_linear_dim, args.ffn_hidden_size)
+                nn.Linear(601, args.ffn_hidden_size) #first_linear_dim, args.ffn_hidden_size) #first_linear_dim, args.ffn_hidden_size)
             ]
             for _ in range(args.ffn_num_layers - 2):
                 ffn.extend([
@@ -152,8 +152,36 @@ class MoleculeModel(nn.Module):
             return self.encoder(batch, features_batch, atom_descriptors_batch,
                                       atom_features_batch, bond_features_batch)
         elif fingerprint_type == 'last_FFN':
-            return self.ffn[:-1](self.encoder(batch, features_batch, atom_descriptors_batch,
-                                            atom_features_batch, bond_features_batch))
+            
+            
+            embedding_combined = self.encoder(batch, features_batch, atom_descriptors_batch,
+                               atom_features_batch, bond_features_batch)
+
+            ### Obtain swapped output:
+            # Obtain mol_frac1 and mol_frac2:
+            T = embedding_combined[0:50,-1].view(-1,1) 
+            mol_frac1 = embedding_combined[0:50,-2].view(-1,1) 
+            mol_frac2 = torch.ones(np.shape(mol_frac1),device='cuda')-mol_frac1
+
+            # Assign embeddings:
+            embedding_shape = (50,300)
+
+            embedding1 = embedding_combined[0:embedding_shape[0],0:embedding_shape[1]]
+            embedding2 = embedding_combined[0:embedding_shape[0],embedding_shape[1]:-2]
+            
+            embedding_combined = torch.concat((embedding1*mol_frac1,embedding2*mol_frac2,T),axis=1)
+            embedding_combined_swapped = torch.concat((embedding2*mol_frac2,embedding1*mol_frac1,T),axis=1)            
+            
+            fp12 = self.ffn[:-1](embedding_combined)
+            fp21 = self.ffn[:-1](embedding_combined_swapped)
+            
+            fp_combined = torch.concat((fp12,fp21),axis=1)
+#             print(np.shape(fp_combined))
+            
+            return fp_combined #fp12 #,fp21
+            
+#             return self.ffn[:-1](self.encoder(batch, features_batch, atom_descriptors_batch,
+#                                             atom_features_batch, bond_features_batch))
         else:
             raise ValueError(f'Unsupported fingerprint type {fingerprint_type}.')
 
@@ -177,9 +205,38 @@ class MoleculeModel(nn.Module):
         :return: The output of the :class:`MoleculeModel`, containing a list of property predictions
         """
 
-        output = self.ffn(self.encoder(batch, features_batch, atom_descriptors_batch,
-                                       atom_features_batch, bond_features_batch))
+        embedding_combined = self.encoder(batch, features_batch, atom_descriptors_batch,
+                                       atom_features_batch, bond_features_batch)
 
+        ## Format: A features file MUST be included containing mole fraction in the first column and temperature in the second column
+        # Batch is also hard-coded here at 50,embedding size at 300
+        # ffn size has been changed
+        
+        ### Obtain swapped output:
+        # Obtain mol_frac1 and mol_frac2:
+        T = embedding_combined[0:50,-1].view(-1,1) 
+        mol_frac1 = embedding_combined[0:50,-2].view(-1,1) 
+        mol_frac2 = torch.ones(np.shape(mol_frac1),device='cuda')-mol_frac1
+        
+        # Assign embeddings:
+        embedding_shape = (50,300)
+        
+        embedding1 = embedding_combined[0:embedding_shape[0],0:embedding_shape[1]]
+        embedding2 = embedding_combined[0:embedding_shape[0],embedding_shape[1]:-2]
+        
+#         # Chas Mod: (Make sure ffn shape is default)
+#         embedding_combined = torch.concat((embedding1,embedding2,mol_frac1),axis=1)
+#         embedding_combined_swapped = torch.concat((embedding2,embedding1,mol_frac2),axis=1)
+        
+        # Mult Mod: (Must change ffn shape)
+        embedding_combined = torch.concat((embedding1*mol_frac1,embedding2*mol_frac2,T),axis=1)
+        embedding_combined_swapped = torch.concat((embedding2*mol_frac2,embedding1*mol_frac1,T),axis=1)
+        
+        output = self.ffn(embedding_combined)
+        output_swapped = self.ffn(embedding_combined_swapped)
+        
+        output_combined = torch.mean(torch.concat((output,output_swapped),axis=1),axis=1).view(-1,1)
+               
         # Don't apply sigmoid during training when using BCEWithLogitsLoss
         if self.classification and not (self.training and self.no_training_normalization):
             output = self.sigmoid(output)
@@ -188,4 +245,43 @@ class MoleculeModel(nn.Module):
             if not (self.training and self.no_training_normalization):
                 output = self.multiclass_softmax(output)  # to get probabilities during evaluation, but not during training when using CrossEntropyLoss
 
-        return output
+        return output_combined
+
+    
+    
+    
+    
+#             ### Obtain swapped output:
+#         # Obtain mol_frac1 and mol_frac2:
+#         mol_frac1 = embedding_combined[0:50,-1].view(-1,1) 
+#         mol_frac2 = torch.ones(np.shape(mol_frac1),device='cuda')-mol_frac1
+        
+#         # Assign embeddings:
+#         embedding_shape = (np.shape(embedding_combined)[0],int(np.shape(embedding_combined)[1]/2))
+        
+#         embedding1 = embedding_combined[0:embedding_shape[0],0:embedding_shape[1]]
+#         embedding2 = embedding_combined[0:embedding_shape[0],embedding_shape[1]:-1]
+        
+# #         # Chas Mod: (Make sure ffn shape is default)
+# #         embedding_combined = torch.concat((embedding1,embedding2,mol_frac1),axis=1)
+# #         embedding_combined_swapped = torch.concat((embedding2,embedding1,mol_frac2),axis=1)
+        
+#         # Mult Mod: (Must change ffn shape)
+#         embedding_combined = torch.concat((embedding1*mol_frac1,embedding2*mol_frac2),axis=1)
+#         embedding_combined_swapped = torch.concat((embedding2*mol_frac2,embedding1*mol_frac1),axis=1)
+        
+        
+#         output = self.ffn(embedding_combined)
+#         output_swapped = self.ffn(embedding_combined_swapped)
+        
+#         output_combined = torch.mean(torch.concat((output,output_swapped),axis=1),axis=1).view(-1,1)
+               
+#         # Don't apply sigmoid during training when using BCEWithLogitsLoss
+#         if self.classification and not (self.training and self.no_training_normalization):
+#             output = self.sigmoid(output)
+#         if self.multiclass:
+#             output = output.reshape((output.size(0), -1, self.num_classes))  # batch size x num targets x num classes per target
+#             if not (self.training and self.no_training_normalization):
+#                 output = self.multiclass_softmax(output)  # to get probabilities during evaluation, but not during training when using CrossEntropyLoss
+
+#         return output_combined

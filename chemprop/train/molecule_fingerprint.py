@@ -101,7 +101,7 @@ def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) 
             raise ValueError('With a ffn_num_layers of 1, there is no latent FFN representation. Use MPN fingerprint type instead.')
     else:
         raise ValueError(f'Fingerprint type {args.fingerprint_type} not supported')
-    all_fingerprints = np.zeros((len(test_data), total_fp_size, len(args.checkpoint_paths)))
+    all_fingerprints = np.zeros((len(test_data), total_fp_size*2, len(args.checkpoint_paths))) #total_fp_size, len(args.checkpoint_paths)))
 
     # Load model
     print(f'Encoding smiles into a fingerprint vector from {len(args.checkpoint_paths)} models.')
@@ -128,6 +128,7 @@ def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) 
         )
         if args.fingerprint_type == 'MPN' and (args.features_path is not None or args.features_generator): # truncate any features from MPN fingerprint
             model_fp = np.array(model_fp)[:,:total_fp_size] 
+#         print(np.shape(all_fingerprints[:,:,index]),np.shape(model_fp))
         all_fingerprints[:,:,index] = model_fp
 
     # Save predictions
@@ -160,7 +161,7 @@ def molecule_fingerprint(args: FingerprintArgs, smiles: List[List[str]] = None) 
     # Copy predictions over to full_data
     for full_index, datapoint in enumerate(full_data):
         valid_index = full_to_valid_indices.get(full_index, None)
-        preds = all_fingerprints[valid_index].reshape((len(args.checkpoint_paths) * total_fp_size)) if valid_index is not None else ['Invalid SMILES'] * len(args.checkpoint_paths) * total_fp_size
+        preds = all_fingerprints[valid_index].reshape((len(args.checkpoint_paths) * total_fp_size*2)) if valid_index is not None else ['Invalid SMILES'] * len(args.checkpoint_paths) * total_fp_size*2
 
         for i in range(len(fingerprint_columns)):
             datapoint.row[fingerprint_columns[i]] = preds[i]
