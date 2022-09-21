@@ -1,4 +1,6 @@
 # Property Prediction for the Binary Mixtures
+**Warning: MixProp is currently configured for use with CUDA. If a GPU is unavailable, the user will receive an error message.**
+
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/chemprop)](https://badge.fury.io/py/chemprop)
 [![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
 [![Build Status](https://github.com/chemprop/chemprop/workflows/tests/badge.svg)](https://github.com/chemprop/chemprop)
