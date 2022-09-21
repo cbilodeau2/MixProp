@@ -10,6 +10,24 @@ This repository contains a modified directed message passing neural network (D-M
 
 **Documentation:** Full documentation of Chemprop Standard is available at https://chemprop.readthedocs.io/en/latest/.
 
+## Train the Model:
+To re-train the model on the training set found in ``pretrained_models/nist_dippr_data`` and store the results in a folder ``checkpoints`` , execute the following command:
+
+```
+mkdir checkpoints
+python train.py --data_path pretrained_models/nist_dippr_data/data.csv --features_path pretrained_models/nist_dippr_data/data_features.csv --no_features_scaling --dataset_type regression --save_dir checkpoints --split_type random --epochs 500 --aggregation norm --gpu 0 --num_folds 25 --ensemble_size 1 --number_of_molecules 2 --mpn_shared
+```
+The test/train split shared in ``pretrained_models/nist_dippr_data`` was one of the three splits reported in the original paper, such that, executing the above command will reproduce the model performance reported in the paper.
+
+## Request the Pre-trained Models:
+Pre-trained models are available on request: cur5wz@virginia.edu.
+
+## Use Pre-trained Models with Graphical User Interface:
+A simple graphical user interface is available for single point predictions and can be opened using:
+```
+python gui.py
+```
+By default, the pre-trained model files are expected to be in ``pretrained_models/nist_dippr_model/nist_dippr_model``. If they are located somewhere else, the variable ``checkpoint_dir`` in ``gui.py`` should be set to the path of the pre-trained model files.
 
 ## Use Pre-trained Models to Predict Test Data:
 Pretrained models can be found in ``pretrained_models/nist_dippr_models`` and these can be used to make predictions for new datasets. To illustrate this, below is the command for predicting viscosity for the test set used to train this model (found in ``pretrained_models/nist_dippr_data/test.csv`` and ``pretrained_models/nist_dippr_data/test_features.csv``:
@@ -26,14 +44,6 @@ To calculate the uncertainty of a given prediction using the ensemble variance a
 python predict.py --test_path pretrained_models/nist_dippr_data/test.csv --features_path pretrained_models/nist_dippr_data/test_features.csv --checkpoint_dir pretrained_models/nist_dippr_model --preds_path test_preds.csv --number_of_molecules 2 --no_features_scaling --dataset_type regression --uncertainty_method ensemble
 ```
 
-## Train the Model:
-To re-train the model on the training set found in ``pretrained_models/nist_dippr_data`` and store the results in a folder ``checkpoints`` , execute the following command:
-
-```
-mkdir checkpoints
-python train.py --data_path pretrained_models/nist_dippr_data/data.csv --features_path pretrained_models/nist_dippr_data/data_features.csv --no_features_scaling --dataset_type regression --save_dir checkpoints --split_type random --epochs 500 --aggregation norm --gpu 0 --num_folds 25 --ensemble_size 1 --number_of_molecules 2 --mpn_shared
-```
-The test/train split shared in ``pretrained_models/nist_dippr_data`` was one of the three splits reported in the original paper, such that, executing the above command will reproduce the model performance reported in the paper.
 
 
 
