@@ -9,14 +9,16 @@ import PySimpleGUI as sg
 import time
 import subprocess
 
+checkpoint_dir = 'pretrained_models/nist_dippr_model/nist_dippr_model'
 
-def run_model(smi1,smi2,molfrac1,T,n_models,num_workers=0):
+def run_model(smi1,smi2,molfrac1,T,checkpoint_dir,n_models,num_workers=0):
     args_list = [
         'python C:/Users/camil/Documents/Notebooks/ViscosityModel/gui_wrap.py',
         '--smi1 '+str(smi1),
         '--smi2 '+str(smi2),
         '--molfrac1 '+str(molfrac1),
         '--T '+str(T),
+        '--checkpoint_dir '+str(checkpoint_dir),
         '--n_models '+str(n_models),
         '--num_workers '+str(num_workers)
         ]
@@ -89,7 +91,7 @@ if __name__ == "__main__":
     
             start = time.time()
 
-            return_value = window.perform_long_operation(lambda :run_model(smi1,smi2,molfrac1,T,n_models),
+            return_value = window.perform_long_operation(lambda :run_model(smi1,smi2,molfrac1,T,checkpoint_dir,n_models),
                                           '-END KEY-')
             
         if event == '-END KEY-':

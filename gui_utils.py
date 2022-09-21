@@ -62,12 +62,12 @@ def load_model(checkpoint_dir):
     return chemprop_model(checkpoint_dir)
     
 
-def visc_pred_onepoint(smi1,smi2,molfrac1,T,
+def visc_pred_onepoint(smi1,smi2,molfrac1,T,checkpoint_dir,
                       T_range = (293,323),
                       threshold = 0.022,
                       n_models=None,
-                      num_workers=4,
-                      checkpoint_dir='pretrained_models/nist_dippr_model/nist_dippr_model'):#'pretrained_models/nist_dippr_model'):
+                      num_workers=4
+                      ):#'pretrained_models/nist_dippr_model'):
     
     try:
         n_models = int(n_models)

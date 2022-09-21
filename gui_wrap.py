@@ -16,6 +16,7 @@ parser.add_argument('--smi1',required=True)
 parser.add_argument('--smi2',required=True)
 parser.add_argument('--molfrac1', type=float,required=True) #Without an args file, many parameters will revert to default
 parser.add_argument('--T', type=float, default=298)
+parser.add_argument('--checkpoint_dir', type=str)
 parser.add_argument('--n_models', type=str, default=2)
 parser.add_argument('--num_workers', type=int, default=0)
 
@@ -26,6 +27,7 @@ pred, rel = visc_pred_onepoint(args.smi1,
                                 args.smi2,
                                 args.molfrac1,
                                 args.T,
+                                args.checkpoint_dir,
                                 n_models=args.n_models,
                                 num_workers=args.num_workers)
 
