@@ -37,7 +37,7 @@ By default, the pre-trained model files are expected to be in ``pretrained_model
 To use the pretrained models to make predictions, below is the command for predicting viscosity for the test set used to train this model (found in ``pretrained_models/nist_dippr_data/test.csv`` and ``pretrained_models/nist_dippr_data/test_features.csv``:
 
 ```
-python predict.py --test_path pretrained_models/nist_dippr_data/test.csv --features_path pretrained_models/nist_dippr_data/test_features.csv --checkpoint_dir pretrained_models/nist_dippr_model --preds_path test_preds.csv --number_of_molecules 2 --no_features_scaling --dataset_type regression
+python predict.py --test_path pretrained_models/nist_dippr_data/test.csv --features_path pretrained_models/nist_dippr_data/test_features.csv --checkpoint_dir pretrained_models/nist_dippr_model --preds_path test_preds.csv --number_of_molecules 2 --no_features_scaling
 ```
 The test/train split shared in ``pretrained_models/nist_dippr_data`` was one of the three splits reported in the original paper, such that, executing the above command will reproduce the model performance reported in the paper.
 
@@ -45,7 +45,7 @@ The test/train split shared in ``pretrained_models/nist_dippr_data`` was one of 
 
 To calculate the uncertainty of a given prediction using the ensemble variance approach, add the ``--uncertainty_method ensemble`` flag:
 ```
-python predict.py --test_path pretrained_models/nist_dippr_data/test.csv --features_path pretrained_models/nist_dippr_data/test_features.csv --checkpoint_dir pretrained_models/nist_dippr_model --preds_path test_preds.csv --number_of_molecules 2 --no_features_scaling --dataset_type regression --uncertainty_method ensemble
+python predict.py --test_path pretrained_models/nist_dippr_data/test.csv --features_path pretrained_models/nist_dippr_data/test_features.csv --checkpoint_dir pretrained_models/nist_dippr_model --preds_path test_preds.csv --number_of_molecules 2 --no_features_scaling --uncertainty_method ensemble
 ```
 
 
