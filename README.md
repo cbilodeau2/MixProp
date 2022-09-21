@@ -3,7 +3,7 @@
 [![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
 [![Build Status](https://github.com/chemprop/chemprop/workflows/tests/badge.svg)](https://github.com/chemprop/chemprop)
 
-This repository contains a modified directed message passing neural network (D-MPNN) for the prediction of binary mixtures. It is based off of the standard D-MPNN described in [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237) and as used in the paper [A Deep Learning Approach to Antibiotic Discovery](https://www.cell.com/cell/fulltext/S0092-8674(20)30102-1).
+This repository contains a modified directed message passing neural network (D-MPNN) for the prediction of binary mixtures. It is based off of the standard D-MPNN described in [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237).
 
 **ChemProp Standard:** The original version of Chemprop for general property prediction is available here: https://github.com/chemprop/chemprop
 
