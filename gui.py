@@ -22,6 +22,7 @@ def run_model(smi1,smi2,molfrac1,T,n_models,num_workers=0):
         ]
     
     output = subprocess.run(' '.join(args_list),capture_output=True)
+    print((output.stdout.split()[-2]).split(b':')[-1])
     pred = float((output.stdout.split()[-2]).split(b':')[-1])
     rel = bool((output.stdout.split()[-1]).split(b':')[-1])
     return pred,rel

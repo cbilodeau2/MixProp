@@ -67,7 +67,7 @@ def visc_pred_onepoint(smi1,smi2,molfrac1,T,
                       threshold = 0.022,
                       n_models=None,
                       num_workers=4,
-                      checkpoint_dir='viscosity_model_ckpt'):
+                      checkpoint_dir='pretrained_models/nist_dippr_model/nist_dippr_model'):#'pretrained_models/nist_dippr_model'):
     
     try:
         n_models = int(n_models)
@@ -96,7 +96,7 @@ def visc_pred_onecurve(smi1,smi2,T,
                       T_range = (293,323),
                       threshold = 0.022,
                       n_models=None,
-                      checkpoint_dir='viscosity_model_ckpt'):
+                      checkpoint_dir='pretrained_models/nist_dippr_model/nist_dippr_model'):
 
     try:
         n_models = int(n_models)
