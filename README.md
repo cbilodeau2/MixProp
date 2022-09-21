@@ -1,5 +1,4 @@
-# Prediction for the viscosity of binary liquid mixtures
-
+# Property Prediction for the Binary Mixtures
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/chemprop)](https://badge.fury.io/py/chemprop)
 [![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
 [![Build Status](https://github.com/chemprop/chemprop/workflows/tests/badge.svg)](https://github.com/chemprop/chemprop)
