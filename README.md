@@ -30,7 +30,7 @@ python gui.py
 By default, the pre-trained model files are expected to be in ``pretrained_models/nist_dippr_model/nist_dippr_model``. If they are located somewhere else, the variable ``checkpoint_dir`` in ``gui.py`` should be set to the path of the pre-trained model files.
 
 ## Use Pre-trained Models to Predict Test Data:
-Pretrained models can be found in ``pretrained_models/nist_dippr_models`` and these can be used to make predictions for new datasets. To illustrate this, below is the command for predicting viscosity for the test set used to train this model (found in ``pretrained_models/nist_dippr_data/test.csv`` and ``pretrained_models/nist_dippr_data/test_features.csv``:
+To use the pretrained models to make predictions, below is the command for predicting viscosity for the test set used to train this model (found in ``pretrained_models/nist_dippr_data/test.csv`` and ``pretrained_models/nist_dippr_data/test_features.csv``:
 
 ```
 python predict.py --test_path pretrained_models/nist_dippr_data/test.csv --features_path pretrained_models/nist_dippr_data/test_features.csv --checkpoint_dir pretrained_models/nist_dippr_model --preds_path test_preds.csv --number_of_molecules 2 --no_features_scaling --dataset_type regression
