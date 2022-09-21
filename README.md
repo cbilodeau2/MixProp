@@ -1,9 +1,11 @@
 # Property Prediction for the Binary Mixtures
-**Warning: MixProp is currently configured for use with CUDA. If a GPU is unavailable, the user will receive an error message.**
 
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/chemprop)](https://badge.fury.io/py/chemprop)
 [![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
 [![Build Status](https://github.com/chemprop/chemprop/workflows/tests/badge.svg)](https://github.com/chemprop/chemprop)
+
+**Warning: MixProp is currently configured for use with CUDA. If a GPU is unavailable, the user will receive an error message.**
+
 
 This repository contains a modified directed message passing neural network (D-MPNN) for the prediction of binary mixtures. It is based off of the standard D-MPNN described in [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237).
 
