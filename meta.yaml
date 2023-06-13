@@ -1,0 +1,39 @@
+{% set name = "mixprop" %}
+{% set version = "1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  fn: '{{ name }}-{{ version }}.tar.gz'
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+
+build:
+  number: 0
+  script: python setup.py install
+
+requirements:
+  build:
+    - python
+    - setuptools
+  host:
+    - numpy
+    - pip
+  run:
+    - python
+    - h5py
+    - matplotlib
+    - numpy
+    - pandas
+    - python
+    - scikit-image
+    - scipy
+
+
+about:
+  home: "https://github.com/cbilodeau2/MixProp"
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE.txt
+  summary: "MixProp is a Viscosity Prediction Model for Binary Liquid Mixtures"

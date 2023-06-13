@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 __version__ = None
 
 src_dir = os.path.abspath(os.path.dirname(__file__))
-version_file = os.path.join(src_dir, 'chemprop', '_version.py')
+version_file = os.path.join(src_dir, 'mixprop', '_version.py')
 
 with open(version_file, encoding='utf-8') as fd:
     exec(fd.read())
@@ -16,24 +16,14 @@ with open('README.md', encoding='utf-8') as f:
 
 
 setup(
-    name='chemprop',
+    name='mixprop',
     version=__version__,
-    author='Kyle Swanson, Kevin Yang, Wengong Jin, Lior Hirschfeld, Allison Tam',
-    author_email='chemprop@mit.edu',
-    description='Molecular Property Prediction with Message Passing Neural Networks',
-    long_description=long_description,
-    long_description_content_type='text/markdown',
-    url='https://github.com/chemprop/chemprop',
-    download_url=f'https://github.com/chemprop/chemprop/v_{__version__}.tar.gz',
-    project_urls={
-        'Documentation': 'https://chemprop.readthedocs.io/en/latest/',
-        'Source': 'https://github.com/chemprop/chemprop',
-        'PyPi': 'https://pypi.org/project/chemprop/',
-        'Demo': 'http://chemprop.csail.mit.edu/',
-    },
+    author='Camille Bilodeau',
+    description='Viscosity Prediction Model for Binary Liquid Mixtures',
+    url='https://github.com/cbilodeau2/MixProp',
+    download_url=f'https://github.com/cbilodeau2/MixProp/v_{__version__}.tar.gz',
     license='MIT',
     packages=find_packages(),
-    package_data={'chemprop': ['py.typed']},
     entry_points={
         'console_scripts': [
             'chemprop_train=chemprop.train:chemprop_train',
