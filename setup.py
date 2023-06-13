@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 __version__ = None
 
 src_dir = os.path.abspath(os.path.dirname(__file__))
-version_file = os.path.join(src_dir, 'mixprop', '_version.py')
+version_file = os.path.join(src_dir, 'chemprop', '_version.py')
 
 with open(version_file, encoding='utf-8') as fd:
     exec(fd.read())
