@@ -4,15 +4,15 @@
 [![PyPI version](https://badge.fury.io/py/chemprop.svg)](https://badge.fury.io/py/chemprop)
 [![Build Status](https://github.com/chemprop/chemprop/workflows/tests/badge.svg)](https://github.com/chemprop/chemprop)
 
-This repository contains a modified directed message passing neural network (D-MPNN) for the prediction of binary mixtures. The corresponding paper is undergoing peer review, and once this process is complete, the accompanying dataset will become publicly available.
+This repository contains a modified directed message passing neural network (D-MPNN) for the prediction of binary mixtures, as described in the paper: https://www.sciencedirect.com/science/article/abs/pii/S1385894723011853.
 
+**Note:** A conda installable version of this package for predicting properties can be found at https://github.com/cbilodeau2/mixprop_viscosity. This repository is intended for reproducing the results found in the paper. If you are interested in making viscosity predictions, but not re-training the model, I recommend you check out the conda installable version.
 
-It is based off of the standard D-MPNN described in [Analyzing Learned Molecular Representations for Property Prediction](https://pubs.acs.org/doi/abs/10.1021/acs.jcim.9b00237).
+**Pretrained Models and Dataset:** The pre-trained models and the dataset used for training can be found at https://zenodo.org/records/8042966.
+
 
 **ChemProp Standard:** The original version of Chemprop for general property prediction is available here: https://github.com/chemprop/chemprop
 
-
-**Documentation:** Full documentation of Chemprop Standard is available at https://chemprop.readthedocs.io/en/latest/.
 
 ## Train the Model:
 To re-train the model on the training set found in ``pretrained_models/nist_dippr_data`` and store the results in a folder ``checkpoints`` , execute the following command:
