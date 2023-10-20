@@ -6,7 +6,7 @@
 
 This repository contains a modified directed message passing neural network (D-MPNN) for the prediction of binary mixtures, as described in the paper: https://www.sciencedirect.com/science/article/abs/pii/S1385894723011853.
 
-**Note:** A conda installable version of this package for predicting properties can be found at https://github.com/cbilodeau2/mixprop_viscosity. This repository is intended for reproducing the results found in the paper. If you are interested in making viscosity predictions, but not re-training the model, I recommend you check out the conda installable version.
+**Note:** A pip installable version of this package for predicting properties can be found at https://github.com/cbilodeau2/mixprop_viscosity. This repository is intended for reproducing the results found in the paper. If you are interested in making viscosity predictions, but not re-training the model, I recommend you check out the pip installable version.
 
 **Pretrained Models and Dataset:** The pre-trained models and the dataset used for training can be found at https://zenodo.org/records/8042966.
 
